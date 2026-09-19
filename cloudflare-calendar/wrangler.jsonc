@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mipolitico-calendar",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-18",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "calendar.mipolitico.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "CALENDAR_DB",
+      "database_name": "mipolitico-calendar",
+      "database_id": "f3acbb4c-9491-4fd3-b5fd-ab882e9b63d5",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

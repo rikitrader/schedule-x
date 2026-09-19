@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07182f" />
+    <meta name="description" content="Calendario MiPolitico, ejecutado de forma nativa en Cloudflare." />
+    <title>Calendario | MiPolitico</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#calendar">Saltar al calendario</a>
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="MiPolitico Calendar inicio">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span><strong>MiPolitico</strong><small>Calendario</small></span>
+      </a>
+      <div class="header-actions">
+        <span id="auth-status" class="auth-status">Solo lectura</span>
+        <button id="new-event" class="primary" type="button" hidden>Nuevo evento</button>
+        <button id="auth-button" type="button">Administrar</button>
+      </div>
+    </header>
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Agenda pública</p>
+          <h1 id="page-title">Calendario MiPolitico</h1>
+          <p>Organiza reuniones, eventos y actividades desde un servicio independiente en Cloudflare.</p>
+        </div>
+        <div class="legend" aria-label="Categorías">
+          <span><i class="dot dot-public"></i>Público</span>
+          <span><i class="dot dot-team"></i>Equipo</span>
+          <span><i class="dot dot-private"></i>Privado</span>
+        </div>
+      </section>
+      <section id="calendar-shell" class="calendar-shell" aria-busy="true">
+        <div id="calendar"></div>
+      </section>
+    </main>
+
+    <dialog id="auth-dialog">
+      <form id="auth-form" class="dialog-card">
+        <button class="dialog-close" type="button" data-close aria-label="Cerrar">×</button>
+        <p class="eyebrow">Acceso seguro</p>
+        <h2>Administrar calendario</h2>
+        <label>Contraseña
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <p id="auth-error" class="form-error" role="alert"></p>
+        <button class="primary" type="submit">Iniciar sesión</button>
+      </form>
+    </dialog>
+
+    <dialog id="event-dialog">
+      <form id="event-form" class="dialog-card event-form">
+        <button class="dialog-close" type="button" data-close aria-label="Cerrar">×</button>
+        <p class="eyebrow">Agenda</p>
+        <h2 id="event-dialog-title">Evento</h2>
+        <input id="event-id" type="hidden" />
+        <label>Título<input id="event-title" maxlength="200" required /></label>
+        <div class="form-row">
+          <label>Inicio<input id="event-start" type="datetime-local" required /></label>
+          <label>Fin<input id="event-end" type="datetime-local" required /></label>
+        </div>
+        <label class="check"><input id="event-all-day" type="checkbox" /> Evento de todo el día</label>
+        <label>Categoría
+          <select id="event-calendar"><option value="public">Público</option><option value="team">Equipo</option><option value="private">Privado</option></select>
+        </label>
+        <label>Ubicación<input id="event-location" maxlength="300" /></label>
+        <label>Descripción<textarea id="event-description" maxlength="4000" rows="4"></textarea></label>
+        <p id="event-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="delete-event" class="danger" type="button" hidden>Eliminar</button>
+          <span class="spacer"></span>
+          <button type="button" data-close>Cancelar</button>
+          <button id="save-event" class="primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

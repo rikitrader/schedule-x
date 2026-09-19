@@ -1,0 +1,28 @@
+{
+  "name": "@mipolitico/cloudflare-calendar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply CALENDAR_DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply CALENDAR_DB --remote",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@schedule-x/calendar": "4.8.0",
+    "@schedule-x/events-service": "4.8.0",
+    "@schedule-x/theme-default": "4.8.0",
+    "@schedule-x/translations": "4.8.0",
+    "temporal-polyfill": "0.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.2",
+    "wrangler": "latest"
+  }
+}

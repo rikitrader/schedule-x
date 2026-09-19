@@ -16,6 +16,16 @@ own framework, into the UI of the calendar. Currently, there are components for 
 
 Website for documentation and demo: https://schedule-x.dev/
 
+## MiPolitico Cloudflare deployment
+
+This fork includes a production deployment layer in [`cloudflare-calendar/`](./cloudflare-calendar). It runs Schedule-X as an independent Cloudflare-native service using Workers, Static Assets, and D1.
+
+- Live service: <https://calendar.mipolitico.com>
+- Health check: <https://calendar.mipolitico.com/api/health>
+- Deployment and operations: [`cloudflare-calendar/README.md`](./cloudflare-calendar/README.md)
+
+The deployment is isolated from the MiPolitico CRM and does not change the upstream Schedule-X packages.
+
 ![Schedule-X calendar demo](https://schedule-x.s3.eu-west-1.amazonaws.com/schedule-x-demo-readme-480p-15fps.gif)
 
 ## Contact
