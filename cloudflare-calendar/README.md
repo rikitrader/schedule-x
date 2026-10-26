@@ -68,30 +68,33 @@ One codebase, one Worker + D1 + CRM per project. Tenant behavior is configuratio
 
 | Config | Worker | Domain | D1 | CRM service | Sign-in |
 |---|---|---|---|---|---|
-| `wrangler.jsonc` | `mipolitico-calendar` | `calendar.mipolitico.com` | `mipolitico-calendar` | `twenty-crm` | admin password |
-| `wrangler.wcpr.jsonc` | `wcpr-calendar` | `calendar.wcpr.pro` | `wcpr-calendar` | `wcpr-crm` | WCPR Mail employees (`wcpr-inbox-auth`) |
-| `wrangler.mozaico.jsonc` | `mozaico-calendar` | `calendar.mozaico.xyz` | `mozaico-calendar` | `mozaico-crm` | Mozaico CRM users (password or live CRM session) |
+| `wrangler.jsonc` | `mipolitico-calendar` | `calendar.mipolitico.com` | `mipolitico-calendar` | `twenty-crm` | hub.mipolitico.com, admin password fallback until `HUB_REQUIRED=true` |
+| `wrangler.wcpr.jsonc` | `wcpr-calendar` | `calendar.wcpr.pro` | `wcpr-calendar` | `wcpr-crm` | hub.wcpr.pro only |
+| `wrangler.mozaico.jsonc` | `mozaico-calendar` | `calendar.mozaico.xyz` | `mozaico-calendar` | `mozaico-crm` | hub.mozaico.xyz only |
 
-Vars: `BRAND_NAME`, `SERVICE_NAME`, `LOCALE` (`es`/`en`), `TIMEZONE`, `CRM_HOST` (must be in the code allowlist and match `CRM_WEBHOOK_URL`), `AUTH_MODE` (`password`/`employee`), and for employee mode `AUTH_PROVIDER`, `AUTH_DB`, `WORKSPACE_ID` (the one CRM workspace this calendar serves), `ADMIN_EMAILS`.
+Vars: `BRAND_NAME`, `SERVICE_NAME`, `LOCALE` (`es`/`en`), `TIMEZONE`, `CRM_HOST` (must be in the code allowlist and match `CRM_WEBHOOK_URL`), `AUTH_MODE` (`password`/`employee`), `HUB` (service binding), `HUB_PROJECT`, `HUB_LOGIN_URL`, `HUB_REQUIRED` (MiPolitico), and for employee mode `WORKSPACE_ID` (the one CRM workspace this calendar serves) and `ADMIN_EMAILS`.
 
 ### Department calendars (employee mode)
 
 Departments work like shared inboxes. Every event has a `department_key`; employees see only departments they hold a grant on (deny by default). Roles: `viewer` (read), `operator` (create/edit/delete), `manager` (operator + manage grants for that department). A grant subject of `*` applies to every signed-in employee. `ADMIN_EMAILS` see everything and use `/admin` for grants, agent assignment, and the audit log.
 
-- The auth database is only ever read. Disabled accounts and forced password changes are re-checked on every request; accounts with two-step verification cannot use password sign-in here (Mozaico users can still arrive with their CRM session).
 - Each department agent gets its own bearer token (`calagt_…`, SHA-256 stored) scoped to its department as operator. Reassigning or disabling a department invalidates its token. Issue with `node scripts/issue-agent-tokens.mjs seeds/<project>.sql <vault>/Credentials.local.md <out.sql>` and apply the SQL with `wrangler d1 execute`.
 - CRM upserts never change an event's department; new CRM-origin events land in `general`.
 
 ### Project-hub SSO
 
-WCPR and Mozaico calendars sign in through their own project hub (`HUB` service binding → `<project>-hub`, entrypoint `HubRpc`). The hub tile lands on `/` (or `/api/auth/hub`). The calendar calls `HUB.verify(cookie, "calendar")`, refuses sessions from any other project's hub, and issues its own hub-linked session. That session ends within 15 seconds of the hub session ending. Hub levels map to roles: Owner → admin, Manager → manager on every department, Staff → operator on their hub departments, Limited → viewer on their hub departments. Explicit calendar grants can only raise access. With no session, `/` redirects to the hub. The local password form is only a fallback at `/?local=1` while `LOCAL_LOGIN=true`.
+The calendar has no login of its own on WCPR and Mozaico. Every request hands the browser's `hub_session` cookie (scoped to the project's parent domain) to `HUB.verify(cookie, "calendar")` over the service binding (`<project>-hub`, entrypoint `HubRpc`), cached 15 seconds per isolate. Sessions from another project's hub are refused.
+
+- No hub session: GET requests get a 302 to the hub login and come back to the original page afterwards (via a short-lived return cookie). Writes get a 401. Only `/api/health` and the signed internal CRM sync API answer without a hub session. Department agents may use their bearer token on `/api/events` and `/api/departments` only.
+- Hub levels map to roles: Owner → admin, Manager → manager on every department, Staff → operator on their hub departments, Limited → viewer on their hub departments. Explicit calendar grants can only raise access.
+- Every response sends HSTS, and plain HTTP gets a 301 to HTTPS.
+- MiPolitico: hub Owner/Manager/Staff count as administrators. Public viewing and the shared admin password remain until `HUB_REQUIRED=true`, after which the gate applies to every page there too.
 
 Provision a tenant:
 
 ```bash
 npx wrangler d1 migrations apply CALENDAR_DB --remote -c wrangler.wcpr.jsonc
 npx wrangler d1 execute wcpr-calendar --remote -c wrangler.wcpr.jsonc --file seeds/wcpr.sql
-npx wrangler secret put SESSION_SECRET -c wrangler.wcpr.jsonc
 npx wrangler secret put CALENDAR_SYNC_SECRET -c wrangler.wcpr.jsonc   # same value on wcpr-crm, never shared across projects
 npm run build && npx wrangler deploy -c wrangler.wcpr.jsonc
 ```

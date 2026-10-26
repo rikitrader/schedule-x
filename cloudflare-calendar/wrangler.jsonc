@@ -28,13 +28,19 @@
     {
       "binding": "CRM_SERVICE",
       "service": "twenty-crm"
-    }
+    },
+    // Project-hub SSO: MiPolitico's own hub only.
+    { "binding": "HUB", "service": "mipolitico-hub", "entrypoint": "HubRpc" }
   ],
   "triggers": {
     "crons": ["* * * * *"]
   },
   "vars": {
-    "CRM_WEBHOOK_URL": "https://crm.mipolitico.com/api/integrations/calendar/webhook"
+    "CRM_WEBHOOK_URL": "https://crm.mipolitico.com/api/integrations/calendar/webhook",
+    "HUB_PROJECT": "mipolitico",
+    "HUB_LOGIN_URL": "https://hub.mipolitico.com/login?next=/go/calendar",
+    // "false": hub sign-in works and the shared admin password stays as a fallback. Set "true" once hub SSO is verified.
+    "HUB_REQUIRED": "false"
   },
   "observability": {
     "enabled": true,

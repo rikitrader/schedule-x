@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
-import { employeeSessionCookie, resolvePrincipal, roleAtLeast, SESSION_COOKIE, validEmail, verifyEmployeeLogin, type Principal, type Role } from './auth'
+import { resolvePrincipal, roleAtLeast, validEmail, type Principal, type Role } from './auth'
 import { t, type MessageKey } from './i18n'
-import { hubConfigured, localLoginAllowed } from './hub'
+import { hubHome } from './hub'
 import { brandName, employeeWorkspace, locale, type Env } from './tenant'
 import { ClientError, error, escapeHtml, json, requireSameOrigin } from './util'
 
@@ -32,7 +32,7 @@ async function visibleDepartments(env: Env, principal: Principal) {
 }
 
 async function sessionBody(env: Env, principal: Principal) {
-  return { authenticated: true, hub: hubConfigured(env), user: { email: principal.email, name: principal.name, admin: principal.admin, kind: principal.kind }, departments: await visibleDepartments(env, principal) }
+  return { authenticated: true, hubUrl: hubHome(env), user: { email: principal.email, name: principal.name, admin: principal.admin, kind: principal.kind }, departments: await visibleDepartments(env, principal) }
 }
 
 async function listDepartmentEvents(request: Request, env: Env, principal: Principal, deps: EventDeps) {
@@ -78,22 +78,10 @@ async function deleteDepartmentEvent(env: Env, ctx: ExecutionContext, principal:
   await audit(env, principal, 'event.deleted', existing.department_key, id); ctx.waitUntil(deps.drainWebhookOutbox(env)); return new Response(null, { status: 204 })
 }
 
-export async function handleEmployeeApi(request: Request, env: Env, ctx: ExecutionContext, deps: EventDeps): Promise<Response> {
+// Callers have already passed the hub gate: principal is a hub-signed-in employee or a department agent.
+export async function handleEmployeeApi(request: Request, env: Env, ctx: ExecutionContext, deps: EventDeps, principal: Principal): Promise<Response> {
   const url = new URL(request.url)
-  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-    if (!requireSameOrigin(request)) return deny(env, 'badOrigin', 403)
-    if (!localLoginAllowed(env)) return deny(env, 'forbidden', 403)
-    const body = await deps.readJson(request) as { email?: unknown; password?: unknown }; const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''; const password = typeof body.password === 'string' ? body.password : ''
-    if (!validEmail(email) || !password || password.length > 512) return deny(env, 'invalidCredentials', 401)
-    const result = await verifyEmployeeLogin(env, email, password); if (!result.ok) return deny(env, result.key, result.status)
-    const cookie = await employeeSessionCookie(env, result.email); const principal = await resolvePrincipal(new Request(request.url, { headers: { cookie: cookie.split(';')[0] } }), env)
-    if (!principal) return deny(env, 'invalidCredentials', 401)
-    return json(await sessionBody(env, principal), 200, { 'set-cookie': cookie })
-  }
-  if (url.pathname === '/api/auth/logout' && request.method === 'POST') { if (!requireSameOrigin(request)) return deny(env, 'badOrigin', 403); return json({ authenticated: false }, 200, { 'set-cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` }) }
-  const principal = await resolvePrincipal(request, env)
-  if (url.pathname === '/api/auth/session' && request.method === 'GET') return json(principal ? await sessionBody(env, principal) : { authenticated: false })
-  if (!principal) return deny(env, 'authRequired', 401)
+  if (url.pathname === '/api/auth/session' && request.method === 'GET') return json(await sessionBody(env, principal))
   // Browser sessions must come from this origin; agents authenticate with a bearer token and have no origin.
   if (request.method !== 'GET' && principal.kind === 'user' && !requireSameOrigin(request)) return deny(env, 'badOrigin', 403)
   if (url.pathname === '/api/departments' && request.method === 'GET') return json({ departments: await visibleDepartments(env, principal) })
@@ -156,9 +144,8 @@ async function applyAdminAction(env: Env, principal: Principal, form: FormData):
   return 'Unknown action.'
 }
 
-export async function handleAdmin(request: Request, env: Env) {
-  const principal = await resolvePrincipal(request, env)
-  if (!principal || principal.kind !== 'user') return Response.redirect(new URL('/', request.url).toString(), 303)
+export async function handleAdmin(request: Request, env: Env, principal: Principal) {
+  if (principal.kind !== 'user') return html('<!doctype html><title>Forbidden</title><p>Agents cannot use the admin page.</p>', 403)
   if (!principal.admin && ![...principal.roles.values()].some((role) => role === 'manager')) return html('<!doctype html><title>Forbidden</title><p>Calendar administration is limited to administrators and department managers. <a href="/">Back</a></p>', 403)
   let notice = ''
   if (request.method === 'POST') { if (!requireSameOrigin(request)) return html('<!doctype html><title>Forbidden</title><p>Origin not allowed.</p>', 403); notice = await applyAdminAction(env, principal, await request.formData()) }
