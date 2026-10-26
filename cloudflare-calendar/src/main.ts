@@ -36,7 +36,8 @@ const employeeMode = tenant.authMode === 'employee'
 const timezone = tenant.timezone || 'America/New_York'
 // With project-hub SSO the hub is the sign-in page; the local form is only a fallback at /?local=1.
 const hubUrl = tenant.hubUrl || ''
-const useHub = employeeMode && Boolean(hubUrl) && !(tenant.localLogin === 'true' && new URLSearchParams(location.search).get('local') === '1')
+const hubRequired = tenant.hubRequired === 'true'
+const useHub = Boolean(hubUrl) && (hubRequired || new URLSearchParams(location.search).get('local') !== '1')
 const text = (key: MessageKey) => t(locale, key)
 const ROLE_RANK: Record<Role, number> = { viewer: 1, operator: 2, manager: 3 }
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector(selector) as T
@@ -142,6 +143,8 @@ calendar.render(calendarElement)
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { ...init, headers: { 'content-type': 'application/json', ...init.headers } })
   if (!response.ok) {
+    // The hub gate answers 401 once the hub session is gone; reloading lets it send the browser to the hub.
+    if (response.status === 401 && hubRequired) location.reload()
     const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` })) as { error?: string }
     throw new Error(body.error || `HTTP ${response.status}`)
   }
@@ -292,10 +295,12 @@ authButton.addEventListener('click', async () => {
     openSignIn()
     return
   }
+  // Employee calendars have no session of their own: signing out happens in the hub.
+  if (employeeMode) { location.assign(hubUrl); return }
   try {
     await request('/api/auth/logout', { method: 'POST', body: '{}' })
     session = { authenticated: false }
-    if (useHub) { location.assign(hubUrl); return }
+    if (hubUrl && (await request<Session>('/api/auth/session')).authenticated) { location.assign(hubUrl); return }
     setAuth(false)
     await loadWorkspaces()
     await loadEvents()
@@ -306,11 +311,9 @@ authButton.addEventListener('click', async () => {
 $('#auth-form').addEventListener('submit', async (event) => {
   event.preventDefault()
   const password = ($('#password') as HTMLInputElement).value
-  const credentials = employeeMode ? { email: ($('#email') as HTMLInputElement).value, password } : { password }
   try {
-    const result = await request<Session>('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) })
+    await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
     ;($('#password') as HTMLInputElement).value = ''
-    if (employeeMode) session = result
     setAuth(true)
     await loadWorkspaces()
     await loadEvents()
@@ -365,7 +368,7 @@ async function initialize() {
     setAuth(session.authenticated)
     await loadWorkspaces()
     await loadEvents()
-    if (employeeMode && !session.authenticated) { if (useHub) location.assign('/api/auth/hub'); else openSignIn() }
+    if (employeeMode && !session.authenticated) location.assign('/api/auth/hub')
   } catch (caught) {
     showToast(message(caught), true)
   } finally {
@@ -376,12 +379,10 @@ async function initialize() {
 function openSignIn() {
   $('#auth-error').textContent = ''
   authDialog.showModal()
-  ;($(employeeMode ? '#email' : '#password') as HTMLInputElement).focus()
+  ;($('#password') as HTMLInputElement).focus()
 }
 
 if (employeeMode) {
-  $('#email-label').hidden = false
-  ;($('#email') as HTMLInputElement).required = true
   $('#event-department-label').hidden = false
   departmentPicker.addEventListener('change', async () => {
     const url = new URL(location.href)

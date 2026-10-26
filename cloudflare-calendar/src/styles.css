@@ -61,4 +61,4 @@ dialog::backdrop { background: #061329a8; backdrop-filter: blur(3px); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 .admin-link { color: #c6d3e3; font-size: .9rem; }
-#workspace-picker-label[hidden], #department-picker-label[hidden], #email-label[hidden], #event-department-label[hidden] { display: none; }
+#workspace-picker-label[hidden], #department-picker-label[hidden], #event-department-label[hidden] { display: none; }

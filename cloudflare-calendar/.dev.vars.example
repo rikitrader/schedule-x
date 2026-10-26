@@ -3,6 +3,7 @@ SESSION_SECRET=replace-with-at-least-32-random-bytes
 CALENDAR_SYNC_SECRET=shared-secret-with-the-crm-worker-at-least-32-bytes
 # Employee mode (see wrangler.wcpr.jsonc / wrangler.mozaico.jsonc for the full var set)
 # AUTH_MODE=employee
-# AUTH_PROVIDER=wcpr-employees
+# HUB_PROJECT=wcpr
+# HUB_LOGIN_URL=https://hub.example.com/login?next=/go/calendar
 # WORKSPACE_ID=replace-with-the-crm-workspace-id
 # ADMIN_EMAILS=admin@example.com

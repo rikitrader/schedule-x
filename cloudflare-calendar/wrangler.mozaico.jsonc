@@ -1,5 +1,5 @@
 {
-  // Mozaico — isolated deployment: own D1, own CRM (mozaico-crm), sign-in with Mozaico CRM accounts (password or CRM session).
+  // Mozaico — isolated deployment: own D1, own CRM (mozaico-crm), sign-in only through the project hub (no local login).
   // Deploy: ~/.claude/scripts/ship-deploy.sh "$PWD" -- npx wrangler deploy -c wrangler.mozaico.jsonc
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "mozaico-calendar",
@@ -8,11 +8,9 @@
   "workers_dev": false,
   "routes": [{ "pattern": "calendar.mozaico.xyz", "custom_domain": true }],
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
-  "secrets": { "required": ["SESSION_SECRET", "CALENDAR_SYNC_SECRET"] },
+  "secrets": { "required": ["CALENDAR_SYNC_SECRET"] },
   "d1_databases": [
-    { "binding": "CALENDAR_DB", "database_name": "mozaico-calendar", "database_id": "b18cede8-f6e6-43b7-982a-42167f809ee2", "migrations_dir": "migrations" },
-    // Mozaico CRM users/sessions (same binding mail.mozaico.xyz uses as CRM_AUTH_DB). The calendar only runs SELECTs against it.
-    { "binding": "AUTH_DB", "database_name": "mozaico-crm", "database_id": "f372fb11-1081-4147-85b9-260ba8e17ddf" }
+    { "binding": "CALENDAR_DB", "database_name": "mozaico-calendar", "database_id": "b18cede8-f6e6-43b7-982a-42167f809ee2", "migrations_dir": "migrations" }
   ],
   "services": [
     { "binding": "CRM_SERVICE", "service": "mozaico-crm" },
@@ -26,12 +24,9 @@
     "LOCALE": "en",
     "TIMEZONE": "America/Los_Angeles",
     "AUTH_MODE": "employee",
-    "AUTH_PROVIDER": "mozaico-crm",
     "WORKSPACE_ID": "c84365d1-e564-4690-a7d4-2268085bc5a2",
     "HUB_PROJECT": "mozaico",
     "HUB_LOGIN_URL": "https://hub.mozaico.xyz/login?next=/go/calendar",
-    // Fallback while hub SSO is being verified: local password form at /?local=1. Set to "false" to make the hub the only sign-in.
-    "LOCAL_LOGIN": "true",
     "ADMIN_EMAILS": "rprieto@mozaico.xyz",
     "CRM_HOST": "mozaico.xyz",
     "CRM_WEBHOOK_URL": "https://mozaico.xyz/api/integrations/calendar/webhook"
