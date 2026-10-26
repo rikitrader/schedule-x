@@ -8,32 +8,36 @@
     <title>Calendario | MiPolitico</title>
   </head>
   <body>
-    <a class="skip-link" href="#calendar">Saltar al calendario</a>
+    <a class="skip-link" href="#calendar" data-i18n="skip">Saltar al calendario</a>
     <header class="app-header">
       <a class="brand" href="/" aria-label="MiPolitico Calendar inicio">
         <span class="brand-mark" aria-hidden="true">M</span>
-        <span><strong>MiPolitico</strong><small>Calendario</small></span>
+        <span><strong>MiPolitico</strong><small data-i18n="brandSub">Calendario</small></span>
       </a>
       <div class="header-actions">
-        <label id="workspace-picker-label" class="workspace-picker" hidden>Espacio
+        <label id="workspace-picker-label" class="workspace-picker" hidden><span data-i18n="workspaceLabel">Espacio</span>
           <select id="workspace-picker" aria-label="Espacio de trabajo del calendario"></select>
         </label>
-        <span id="auth-status" class="auth-status">Solo lectura</span>
-        <button id="new-event" class="primary" type="button" hidden>Nuevo evento</button>
-        <button id="auth-button" type="button">Administrar</button>
+        <label id="department-picker-label" class="workspace-picker" hidden><span data-i18n="departmentLabel">Departamento</span>
+          <select id="department-picker" data-i18n-aria="departmentLabel" aria-label="Departamento"></select>
+        </label>
+        <a id="admin-link" class="admin-link" href="/admin" data-i18n="admin" hidden>Administración</a>
+        <span id="auth-status" class="auth-status" data-i18n="readOnly">Solo lectura</span>
+        <button id="new-event" class="primary" type="button" data-i18n="newEvent" hidden>Nuevo evento</button>
+        <button id="auth-button" type="button" data-i18n="manage">Administrar</button>
       </div>
     </header>
     <main>
       <section class="intro" aria-labelledby="page-title">
         <div>
-          <p class="eyebrow">Agenda pública</p>
-          <h1 id="page-title">Calendario MiPolitico</h1>
-          <p>Organiza reuniones, eventos y actividades desde un servicio independiente en Cloudflare.</p>
+          <p class="eyebrow" data-i18n="introEyebrow">Agenda pública</p>
+          <h1 id="page-title" data-i18n="pageTitle">Calendario MiPolitico</h1>
+          <p data-i18n="intro">Organiza reuniones, eventos y actividades desde un servicio independiente en Cloudflare.</p>
         </div>
-        <div class="legend" aria-label="Categorías">
-          <span><i class="dot dot-public"></i>Público</span>
-          <span><i class="dot dot-team"></i>Equipo</span>
-          <span><i class="dot dot-private"></i>Privado</span>
+        <div class="legend" aria-label="Categorías" data-i18n-aria="categories">
+          <span><i class="dot dot-public"></i><span data-i18n="public">Público</span></span>
+          <span><i class="dot dot-team"></i><span data-i18n="team">Equipo</span></span>
+          <span><i class="dot dot-private"></i><span data-i18n="private">Privado</span></span>
         </div>
       </section>
       <section id="calendar-shell" class="calendar-shell" aria-busy="true">
@@ -43,40 +47,46 @@
 
     <dialog id="auth-dialog">
       <form id="auth-form" class="dialog-card">
-        <button class="dialog-close" type="button" data-close aria-label="Cerrar">×</button>
-        <p class="eyebrow">Acceso seguro</p>
-        <h2>Administrar calendario</h2>
-        <label>Contraseña
+        <button class="dialog-close" type="button" data-close aria-label="Cerrar" data-i18n-aria="close">×</button>
+        <p class="eyebrow" data-i18n="secureAccess">Acceso seguro</p>
+        <h2 data-i18n="authTitle">Administrar calendario</h2>
+        <label id="email-label" hidden><span data-i18n="email">Correo</span>
+          <input id="email" name="email" type="email" autocomplete="username" maxlength="254" />
+        </label>
+        <label><span data-i18n="password">Contraseña</span>
           <input id="password" name="password" type="password" autocomplete="current-password" required />
         </label>
         <p id="auth-error" class="form-error" role="alert"></p>
-        <button class="primary" type="submit">Iniciar sesión</button>
+        <button class="primary" type="submit" data-i18n="login">Iniciar sesión</button>
       </form>
     </dialog>
 
     <dialog id="event-dialog">
       <form id="event-form" class="dialog-card event-form">
-        <button class="dialog-close" type="button" data-close aria-label="Cerrar">×</button>
-        <p class="eyebrow">Agenda</p>
-        <h2 id="event-dialog-title">Evento</h2>
+        <button class="dialog-close" type="button" data-close aria-label="Cerrar" data-i18n-aria="close">×</button>
+        <p class="eyebrow" data-i18n="agenda">Agenda</p>
+        <h2 id="event-dialog-title" data-i18n="event">Evento</h2>
         <input id="event-id" type="hidden" />
-        <label>Título<input id="event-title" maxlength="200" required /></label>
+        <label><span data-i18n="title">Título</span><input id="event-title" maxlength="200" required /></label>
         <div class="form-row">
-          <label>Inicio<input id="event-start" type="datetime-local" required /></label>
-          <label>Fin<input id="event-end" type="datetime-local" required /></label>
+          <label><span data-i18n="start">Inicio</span><input id="event-start" type="datetime-local" required /></label>
+          <label><span data-i18n="end">Fin</span><input id="event-end" type="datetime-local" required /></label>
         </div>
-        <label class="check"><input id="event-all-day" type="checkbox" /> Evento de todo el día</label>
-        <label>Categoría
-          <select id="event-calendar"><option value="public">Público</option><option value="team">Equipo</option><option value="private">Privado</option></select>
+        <label class="check"><input id="event-all-day" type="checkbox" /> <span data-i18n="allDay">Evento de todo el día</span></label>
+        <label id="event-department-label" hidden><span data-i18n="department">Departamento</span>
+          <select id="event-department"></select>
         </label>
-        <label>Ubicación<input id="event-location" maxlength="300" /></label>
-        <label>Descripción<textarea id="event-description" maxlength="4000" rows="4"></textarea></label>
+        <label><span data-i18n="category">Categoría</span>
+          <select id="event-calendar"><option value="public" data-i18n="public">Público</option><option value="team" data-i18n="team">Equipo</option><option value="private" data-i18n="private">Privado</option></select>
+        </label>
+        <label><span data-i18n="location">Ubicación</span><input id="event-location" maxlength="300" /></label>
+        <label><span data-i18n="description">Descripción</span><textarea id="event-description" maxlength="4000" rows="4"></textarea></label>
         <p id="event-error" class="form-error" role="alert"></p>
         <div class="dialog-actions">
-          <button id="delete-event" class="danger" type="button" hidden>Eliminar</button>
+          <button id="delete-event" class="danger" type="button" data-i18n="delete" hidden>Eliminar</button>
           <span class="spacer"></span>
-          <button type="button" data-close>Cancelar</button>
-          <button id="save-event" class="primary" type="submit">Guardar</button>
+          <button type="button" data-close data-i18n="cancel">Cancelar</button>
+          <button id="save-event" class="primary" type="submit" data-i18n="save">Guardar</button>
         </div>
       </form>
     </dialog>

@@ -1,3 +1,8 @@
 CALENDAR_ADMIN_PASSWORD=replace-with-a-long-random-password
 SESSION_SECRET=replace-with-at-least-32-random-bytes
 CALENDAR_SYNC_SECRET=shared-secret-with-the-crm-worker-at-least-32-bytes
+# Employee mode (see wrangler.wcpr.jsonc / wrangler.mozaico.jsonc for the full var set)
+# AUTH_MODE=employee
+# AUTH_PROVIDER=wcpr-employees
+# WORKSPACE_ID=replace-with-the-crm-workspace-id
+# ADMIN_EMAILS=admin@example.com
