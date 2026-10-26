@@ -1,15 +1,16 @@
 /// <reference types="@cloudflare/workers-types" />
 import type { MessageKey } from './i18n'
 import { adminEmails, authProvider, employeeWorkspace, type Env } from './tenant'
-import { base64Url, encoder, equalStrings, fromBase64Url, hex, hmac, readCookie, sha256 } from './util'
+import { hubSession, rolesForHubLevel } from './hub'
+import { base64Url, encoder, equalStrings, fromBase64Url, hex, hmac, readCookie, SESSION_COOKIE, SESSION_TTL_SECONDS, sha256 } from './util'
+
+export { SESSION_COOKIE, SESSION_TTL_SECONDS }
 
 // Employee sign-in against the project's own mail/CRM accounts. The auth database is only ever SELECTed from.
 export type Role = 'viewer' | 'operator' | 'manager'
 export type Principal = { kind: 'user' | 'agent'; email: string; name: string; admin: boolean; roles: Map<string, Role> }
 type LoginResult = { ok: true; email: string; name: string } | { ok: false; status: number; key: MessageKey }
 
-export const SESSION_COOKIE = '__Host-calendar_session'
-export const SESSION_TTL_SECONDS = 60 * 60 * 12
 const MAX_PBKDF2_ITERATIONS = 100_000 // Workers rejects PBKDF2 above 100k iterations.
 const ROLE_RANK: Record<Role, number> = { viewer: 1, operator: 2, manager: 3 }
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -102,6 +103,15 @@ async function agentPrincipal(env: Env, token: string): Promise<Principal | null
 export async function resolvePrincipal(request: Request, env: Env): Promise<Principal | null> {
   const bearer = request.headers.get('authorization')?.match(/^Bearer\s+(\S+)$/iu)?.[1]
   if (bearer) return agentPrincipal(env, bearer)
+  const hub = await hubSession(request, env)
+  if (hub) {
+    // Hub level sets the baseline; explicit calendar grants can only raise it.
+    const departments = await env.CALENDAR_DB.prepare('SELECT key FROM calendar_departments WHERE enabled = 1').all<{ key: string }>()
+    const base = rolesForHubLevel(hub.level, hub.departments, departments.results.map((row) => row.key)); const admin = base.admin || adminEmails(env).has(hub.email)
+    const roles = admin ? await rolesFor(env, hub.email, true) : base.roles
+    if (!admin) for (const [key, role] of await rolesFor(env, hub.email, false)) if (!roleAtLeast(roles.get(key), role)) roles.set(key, role)
+    return { kind: 'user', email: hub.email, name: hub.name, admin, roles }
+  }
   const email = (await sessionEmail(request, env)) ?? (await crmSessionEmail(request, env)); if (!email) return null
   const identity = await activeIdentity(env, email); if (!identity) return null
   const normalized = identity.email.toLowerCase(); const admin = adminEmails(env).has(normalized)

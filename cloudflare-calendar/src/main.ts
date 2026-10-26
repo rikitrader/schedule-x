@@ -34,6 +34,9 @@ const tenant = document.body.dataset
 const locale: Locale = tenant.locale === 'en' ? 'en' : 'es'
 const employeeMode = tenant.authMode === 'employee'
 const timezone = tenant.timezone || 'America/New_York'
+// With project-hub SSO the hub is the sign-in page; the local form is only a fallback at /?local=1.
+const hubUrl = tenant.hubUrl || ''
+const useHub = employeeMode && Boolean(hubUrl) && !(tenant.localLogin === 'true' && new URLSearchParams(location.search).get('local') === '1')
 const text = (key: MessageKey) => t(locale, key)
 const ROLE_RANK: Record<Role, number> = { viewer: 1, operator: 2, manager: 3 }
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector(selector) as T
@@ -285,12 +288,14 @@ for (const close of document.querySelectorAll<HTMLElement>('[data-close]')) clos
 newButton.addEventListener('click', () => openNew())
 authButton.addEventListener('click', async () => {
   if (!authenticated) {
+    if (useHub) { location.assign('/api/auth/hub'); return }
     openSignIn()
     return
   }
   try {
     await request('/api/auth/logout', { method: 'POST', body: '{}' })
     session = { authenticated: false }
+    if (useHub) { location.assign(hubUrl); return }
     setAuth(false)
     await loadWorkspaces()
     await loadEvents()
@@ -360,7 +365,7 @@ async function initialize() {
     setAuth(session.authenticated)
     await loadWorkspaces()
     await loadEvents()
-    if (employeeMode && !session.authenticated) openSignIn()
+    if (employeeMode && !session.authenticated) { if (useHub) location.assign('/api/auth/hub'); else openSignIn() }
   } catch (caught) {
     showToast(message(caught), true)
   } finally {

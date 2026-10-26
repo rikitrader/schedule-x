@@ -14,7 +14,11 @@
     // Mozaico CRM users/sessions (same binding mail.mozaico.xyz uses as CRM_AUTH_DB). The calendar only runs SELECTs against it.
     { "binding": "AUTH_DB", "database_name": "mozaico-crm", "database_id": "f372fb11-1081-4147-85b9-260ba8e17ddf" }
   ],
-  "services": [{ "binding": "CRM_SERVICE", "service": "mozaico-crm" }],
+  "services": [
+    { "binding": "CRM_SERVICE", "service": "mozaico-crm" },
+    // Project-hub SSO: this project's own hub only (sessions from another hub are unknown to it).
+    { "binding": "HUB", "service": "mozaico-hub", "entrypoint": "HubRpc" }
+  ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "BRAND_NAME": "Mozaico",
@@ -24,6 +28,10 @@
     "AUTH_MODE": "employee",
     "AUTH_PROVIDER": "mozaico-crm",
     "WORKSPACE_ID": "c84365d1-e564-4690-a7d4-2268085bc5a2",
+    "HUB_PROJECT": "mozaico",
+    "HUB_LOGIN_URL": "https://hub.mozaico.xyz/login?next=/go/calendar",
+    // Fallback while hub SSO is being verified: local password form at /?local=1. Set to "false" to make the hub the only sign-in.
+    "LOCAL_LOGIN": "true",
     "ADMIN_EMAILS": "rprieto@mozaico.xyz",
     "CRM_HOST": "mozaico.xyz",
     "CRM_WEBHOOK_URL": "https://mozaico.xyz/api/integrations/calendar/webhook"

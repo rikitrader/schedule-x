@@ -17,3 +17,5 @@ export function readCookie(request: Request, name: string) { const cookie = requ
 export function requireSameOrigin(request: Request) { return request.headers.get('origin') === new URL(request.url).origin }
 export const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/gu, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
 export class ClientError extends Error { readonly status: number; constructor(message: string, status = 400) { super(message); this.status = status } }
+export const SESSION_COOKIE = '__Host-calendar_session'
+export const SESSION_TTL_SECONDS = 60 * 60 * 12
