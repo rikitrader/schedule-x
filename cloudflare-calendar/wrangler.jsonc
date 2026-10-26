@@ -24,6 +24,18 @@
       "migrations_dir": "migrations"
     }
   ],
+  "services": [
+    {
+      "binding": "CRM_SERVICE",
+      "service": "twenty-crm"
+    }
+  ],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "CRM_WEBHOOK_URL": "https://crm.mipolitico.com/api/integrations/calendar/webhook"
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

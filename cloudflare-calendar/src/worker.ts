@@ -3,221 +3,147 @@
 interface Env {
   CALENDAR_DB: D1Database
   ASSETS: Fetcher
+  CRM_SERVICE?: Fetcher
   CALENDAR_ADMIN_PASSWORD: string
   SESSION_SECRET: string
+  CALENDAR_SYNC_SECRET?: string
+  CRM_WEBHOOK_URL?: string
 }
 
-type EventInput = {
-  title: string
-  start: string
-  end: string
-  isAllDay?: boolean
-  calendarId?: string
-  description?: string
-  location?: string
-}
-
+type EventInput = { title: string; start: string; end: string; isAllDay?: boolean; calendarId?: string; description?: string; location?: string }
+type EventRow = Record<string, unknown>
 const SESSION_COOKIE = '__Host-calendar_session'
 const SESSION_TTL_SECONDS = 60 * 60 * 12
+const SIGNATURE_WINDOW_MS = 5 * 60 * 1000
 const encoder = new TextEncoder()
-
-const json = (data: unknown, status = 200, headers: HeadersInit = {}) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
-  })
-
+const json = (data: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } })
 const error = (message: string, status: number) => json({ error: message }, status)
 
-function base64Url(bytes: Uint8Array) {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
-}
+function base64Url(bytes: Uint8Array) { let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '') }
+function hex(bytes: Uint8Array) { return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('') }
+async function hmacBytes(value: string, secret: string) { const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value))) }
+async function hmac(value: string, secret: string) { return base64Url(await hmacBytes(value, secret)) }
+async function sha256(value: string) { return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value)))) }
+async function digest(value: string) { return new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value))) }
+function equalBytes(left: Uint8Array, right: Uint8Array) { if (left.length !== right.length) return false; let result = 0; for (let i = 0; i < left.length; i += 1) result |= left[i] ^ right[i]; return result === 0 }
+function validWorkspaceId(value: string | null): value is string { return Boolean(value && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(value)) }
+function validEventId(value: string) { return /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,191}$/u.test(value) }
 
-async function hmac(value: string, secret: string) {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return base64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value))))
-}
-
-async function digest(value: string) {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value)))
-}
-
-function equalBytes(left: Uint8Array, right: Uint8Array) {
-  if (left.length !== right.length) return false
-  let result = 0
-  for (let i = 0; i < left.length; i += 1) result |= left[i] ^ right[i]
-  return result === 0
-}
-
-function readCookie(request: Request, name: string) {
-  const cookie = request.headers.get('cookie') || ''
-  for (const part of cookie.split(';')) {
-    const [key, ...value] = part.trim().split('=')
-    if (key === name) return value.join('=')
-  }
-  return null
-}
-
-async function isAdmin(request: Request, env: Env) {
-  const token = readCookie(request, SESSION_COOKIE)
-  if (!token || env.SESSION_SECRET.length < 32) return false
-  const [expires, signature] = token.split('.')
-  if (!expires || !signature || !/^\d+$/u.test(expires) || Number(expires) <= Date.now()) return false
-  const expected = await hmac(expires, env.SESSION_SECRET)
-  return equalBytes(encoder.encode(signature), encoder.encode(expected))
-}
-
-function requireSameOrigin(request: Request) {
-  const origin = request.headers.get('origin')
-  return origin === new URL(request.url).origin
-}
-
-async function readJson(request: Request) {
-  const type = request.headers.get('content-type') || ''
-  if (!type.toLowerCase().startsWith('application/json')) throw new Error('El contenido debe ser JSON.')
-  return request.json()
-}
+function readCookie(request: Request, name: string) { const cookie = request.headers.get('cookie') || ''; for (const part of cookie.split(';')) { const [key, ...value] = part.trim().split('='); if (key === name) return value.join('=') } return null }
+async function isAdmin(request: Request, env: Env) { const token = readCookie(request, SESSION_COOKIE); if (!token || env.SESSION_SECRET.length < 32) return false; const [expires, signature] = token.split('.'); if (!expires || !signature || !/^\d+$/u.test(expires) || Number(expires) <= Date.now()) return false; const expected = await hmac(expires, env.SESSION_SECRET); return equalBytes(encoder.encode(signature), encoder.encode(expected)) }
+function requireSameOrigin(request: Request) { return request.headers.get('origin') === new URL(request.url).origin }
+async function readJson(request: Request) { const type = request.headers.get('content-type') || ''; if (!type.toLowerCase().startsWith('application/json')) throw new Error('El contenido debe ser JSON.'); return request.json() }
 
 function validateEvent(value: unknown): EventInput {
   if (!value || typeof value !== 'object') throw new Error('Evento inválido.')
-  const body = value as Record<string, unknown>
-  const title = typeof body.title === 'string' ? body.title.trim() : ''
-  const start = typeof body.start === 'string' ? body.start : ''
-  const end = typeof body.end === 'string' ? body.end : ''
-  const calendarId = typeof body.calendarId === 'string' ? body.calendarId : 'public'
-  const isAllDay = body.isAllDay === true
-  const description = typeof body.description === 'string' ? body.description.trim() : ''
-  const location = typeof body.location === 'string' ? body.location.trim() : ''
+  const body = value as Record<string, unknown>; const title = typeof body.title === 'string' ? body.title.trim() : ''; const start = typeof body.start === 'string' ? body.start : ''; const end = typeof body.end === 'string' ? body.end : ''; const calendarId = typeof body.calendarId === 'string' ? body.calendarId : 'public'; const isAllDay = body.isAllDay === true; const description = typeof body.description === 'string' ? body.description.trim() : ''; const location = typeof body.location === 'string' ? body.location.trim() : ''
   if (!title || title.length > 200) throw new Error('El título debe tener entre 1 y 200 caracteres.')
   if (!start || !end || start >= end) throw new Error('El rango de fechas no es válido.')
   if (!['public', 'team', 'private'].includes(calendarId)) throw new Error('La categoría no es válida.')
   if (description.length > 4000 || location.length > 300) throw new Error('El contenido supera el límite permitido.')
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/u
-  const zoned = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?\[[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+\]$/u
-  if (isAllDay ? !(dateOnly.test(start) && dateOnly.test(end)) : !(zoned.test(start) && zoned.test(end))) {
-    throw new Error('El formato de fecha no es válido.')
-  }
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/u; const zoned = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?\[[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+\]$/u; const instant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/u
+  if (isAllDay ? !(dateOnly.test(start) && dateOnly.test(end)) : !((zoned.test(start) || instant.test(start)) && (zoned.test(end) || instant.test(end)))) throw new Error('El formato de fecha no es válido.')
   return { title, start, end, isAllDay, calendarId, description, location }
 }
 
-function eventFromRow(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    title: row.title,
-    start: row.start_at,
-    end: row.end_at,
-    isAllDay: row.is_all_day === 1,
-    calendarId: row.calendar_id,
-    description: row.description,
-    location: row.location,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
-}
+function eventFromRow(row: EventRow) { return { id: row.id, workspaceId: row.workspace_id, title: row.title, start: row.start_at, end: row.end_at, isAllDay: row.is_all_day === 1, calendarId: row.calendar_id, description: row.description, location: row.location, source: row.source, revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at } }
+function workspaceForRequest(request: Request, admin: boolean) { const requested = new URL(request.url).searchParams.get('workspace'); return admin && validWorkspaceId(requested) ? requested : 'public' }
+async function ensureWorkspace(env: Env, workspaceId: string, name = workspaceId, source: 'local' | 'crm' = 'crm') { const now = new Date().toISOString(); await env.CALENDAR_DB.prepare(`INSERT INTO calendar_workspaces (id,name,source,created_at,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,source=excluded.source,updated_at=excluded.updated_at`).bind(workspaceId, name.slice(0, 160), source, now, now).run() }
 
 async function listEvents(request: Request, env: Env) {
-  const url = new URL(request.url)
-  const from = url.searchParams.get('from')
-  const to = url.searchParams.get('to')
-  let statement = 'SELECT * FROM calendar_events'
-  const values: string[] = []
-  const clauses: string[] = []
-  if (!(await isAdmin(request, env))) clauses.push("calendar_id = 'public'")
-  if (from && to) {
-    clauses.push('end_at >= ? AND start_at <= ?')
-    values.push(from, to)
+  const url = new URL(request.url); const admin = await isAdmin(request, env); const workspaceId = workspaceForRequest(request, admin); const from = url.searchParams.get('from'); const to = url.searchParams.get('to'); let statement = 'SELECT * FROM calendar_events WHERE workspace_id = ?'; const values: string[] = [workspaceId]
+  if (!admin) statement += " AND calendar_id = 'public'"
+  if (from && to) { statement += ' AND end_at >= ? AND start_at <= ?'; values.push(from, to) }
+  statement += ' ORDER BY start_at ASC LIMIT 5000'; const result = await env.CALENDAR_DB.prepare(statement).bind(...values).all(); return json({ workspaceId, events: result.results.map((row) => eventFromRow(row as EventRow)) })
+}
+
+function outboxStatement(env: Env, workspaceId: string, eventId: string, eventType: string, payload: unknown, now: string) { return env.CALENDAR_DB.prepare(`INSERT INTO calendar_webhook_outbox (id,workspace_id,event_id,event_type,payload_json,status,attempts,next_attempt_at,created_at,updated_at) VALUES (?,?,?,?,?,'pending',0,?,?,?)`).bind(crypto.randomUUID(), workspaceId, eventId, eventType, JSON.stringify(payload), now, now, now) }
+
+async function createEvent(request: Request, env: Env, ctx: ExecutionContext) {
+  const input = validateEvent(await readJson(request)); const workspaceId = workspaceForRequest(request, true); const id = crypto.randomUUID(); const now = new Date().toISOString(); const event = { id, workspaceId, ...input, source: 'calendar', revision: 1, createdAt: now, updatedAt: now }
+  await ensureWorkspace(env, workspaceId, workspaceId, workspaceId === 'public' ? 'local' : 'crm')
+  await env.CALENDAR_DB.batch([env.CALENDAR_DB.prepare(`INSERT INTO calendar_events (workspace_id,id,title,start_at,end_at,is_all_day,calendar_id,description,location,source,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'calendar',1,?,?)`).bind(workspaceId, id, input.title, input.start, input.end, input.isAllDay ? 1 : 0, input.calendarId, input.description, input.location, now, now), outboxStatement(env, workspaceId, id, 'calendar.event.created', { event }, now)])
+  ctx.waitUntil(drainWebhookOutbox(env)); return json({ event }, 201)
+}
+
+async function updateEvent(request: Request, env: Env, id: string, ctx: ExecutionContext) {
+  const input = validateEvent(await readJson(request)); const workspaceId = workspaceForRequest(request, true); const existing = await env.CALENDAR_DB.prepare('SELECT revision FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, id).first<{ revision: number }>(); if (!existing) return error('Evento no encontrado.', 404)
+  const revision = Number(existing.revision) + 1; const now = new Date().toISOString(); const event = { id, workspaceId, ...input, source: 'calendar', revision, updatedAt: now }
+  await env.CALENDAR_DB.batch([env.CALENDAR_DB.prepare(`UPDATE calendar_events SET title=?,start_at=?,end_at=?,is_all_day=?,calendar_id=?,description=?,location=?,source='calendar',revision=?,updated_at=? WHERE workspace_id=? AND id=?`).bind(input.title, input.start, input.end, input.isAllDay ? 1 : 0, input.calendarId, input.description, input.location, revision, now, workspaceId, id), outboxStatement(env, workspaceId, id, 'calendar.event.updated', { event }, now)])
+  ctx.waitUntil(drainWebhookOutbox(env)); const row = await env.CALENDAR_DB.prepare('SELECT * FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, id).first(); return json({ event: eventFromRow(row as EventRow) })
+}
+
+async function deleteEvent(env: Env, workspaceId: string, id: string, ctx: ExecutionContext) {
+  const existing = await env.CALENDAR_DB.prepare('SELECT revision FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, id).first<{ revision: number }>(); if (!existing) return error('Evento no encontrado.', 404)
+  const now = new Date().toISOString(); const payload = { event: { id, workspaceId, revision: Number(existing.revision) + 1, updatedAt: now } }
+  await env.CALENDAR_DB.batch([env.CALENDAR_DB.prepare('DELETE FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, id), outboxStatement(env, workspaceId, id, 'calendar.event.deleted', payload, now)])
+  ctx.waitUntil(drainWebhookOutbox(env)); return new Response(null, { status: 204 })
+}
+
+export async function verifyServiceRequest(request: Request, env: Pick<Env, 'CALENDAR_SYNC_SECRET'>, rawBody: string) {
+  if (!env.CALENDAR_SYNC_SECRET || env.CALENDAR_SYNC_SECRET.length < 32) return false
+  const timestamp = request.headers.get('x-calendar-timestamp') || ''; const signature = request.headers.get('x-calendar-signature') || ''
+  if (!/^\d{13}$/u.test(timestamp) || !/^[a-f0-9]{64}$/u.test(signature) || Math.abs(Date.now() - Number(timestamp)) > SIGNATURE_WINDOW_MS) return false
+  const url = new URL(request.url); const canonical = `${timestamp}.${request.method}.${url.pathname}.${await sha256(rawBody)}`; const expected = hex(await hmacBytes(canonical, env.CALENDAR_SYNC_SECRET)); return equalBytes(encoder.encode(signature), encoder.encode(expected))
+}
+
+async function handleInternalApi(request: Request, env: Env) {
+  const url = new URL(request.url); const match = url.pathname.match(/^\/api\/internal\/v1\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})\/events(?:\/([A-Za-z0-9][A-Za-z0-9_.:@-]{0,191}))?$/u); if (!match) return error('Ruta no encontrada.', 404)
+  const rawBody = request.method === 'GET' ? '' : await request.text(); if (!(await verifyServiceRequest(request, env, rawBody))) return error('Firma de servicio inválida.', 401)
+  const workspaceId = match[1]; const eventId = match[2]; const requestId = request.headers.get('x-calendar-request-id') || ''
+  if (request.method !== 'GET' && !/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u.test(requestId)) return error('Identificador de solicitud inválido.', 400)
+  if (request.method !== 'GET') { const replay = await env.CALENDAR_DB.prepare('SELECT response_status as status,response_json as body FROM calendar_service_requests WHERE request_id=? AND workspace_id=?').bind(requestId, workspaceId).first<{ status: number; body: string | null }>(); if (replay) return new Response(replay.body, { status: replay.status, headers: replay.body ? { 'content-type': 'application/json; charset=utf-8' } : {} }) }
+  if (request.method === 'GET' && !eventId) { const rows = await env.CALENDAR_DB.prepare('SELECT * FROM calendar_events WHERE workspace_id=? ORDER BY start_at,id LIMIT 5000').bind(workspaceId).all(); return json({ workspaceId, events: rows.results.map((row) => eventFromRow(row as EventRow)) }) }
+  if (request.method === 'PUT' && eventId && validEventId(eventId)) {
+    const body = JSON.parse(rawBody) as Record<string, unknown>; const input = validateEvent(body); const revision = Math.max(1, Number(body.revision ?? 1)); const now = typeof body.updatedAt === 'string' && !Number.isNaN(Date.parse(body.updatedAt)) ? body.updatedAt : new Date().toISOString()
+    await ensureWorkspace(env, workspaceId, typeof body.workspaceName === 'string' ? body.workspaceName : workspaceId, 'crm')
+    await env.CALENDAR_DB.prepare(`INSERT INTO calendar_events (workspace_id,id,title,start_at,end_at,is_all_day,calendar_id,description,location,source,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'crm',?,?,?) ON CONFLICT(workspace_id,id) DO UPDATE SET title=excluded.title,start_at=excluded.start_at,end_at=excluded.end_at,is_all_day=excluded.is_all_day,calendar_id=excluded.calendar_id,description=excluded.description,location=excluded.location,source='crm',revision=excluded.revision,updated_at=excluded.updated_at WHERE excluded.revision>=calendar_events.revision`).bind(workspaceId, eventId, input.title, input.start, input.end, input.isAllDay ? 1 : 0, input.calendarId, input.description, input.location, revision, now, now).run()
+    const row = await env.CALENDAR_DB.prepare('SELECT * FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, eventId).first(); const responseBody = JSON.stringify({ event: eventFromRow(row as EventRow) }); await env.CALENDAR_DB.prepare('INSERT INTO calendar_service_requests (request_id,workspace_id,method,path,response_status,response_json,received_at) VALUES (?,?,?,?,200,?,?)').bind(requestId, workspaceId, request.method, url.pathname, responseBody, new Date().toISOString()).run(); return new Response(responseBody, { headers: { 'content-type': 'application/json; charset=utf-8' } })
   }
-  if (clauses.length) statement += ` WHERE ${clauses.join(' AND ')}`
-  statement += ' ORDER BY start_at ASC LIMIT 5000'
-  const result = await env.CALENDAR_DB.prepare(statement).bind(...values).all()
-  return json({ events: result.results.map((row) => eventFromRow(row as Record<string, unknown>)) })
+  if (request.method === 'DELETE' && eventId && validEventId(eventId)) { await env.CALENDAR_DB.prepare('DELETE FROM calendar_events WHERE workspace_id=? AND id=?').bind(workspaceId, eventId).run(); await env.CALENDAR_DB.prepare('INSERT INTO calendar_service_requests (request_id,workspace_id,method,path,response_status,response_json,received_at) VALUES (?,?,?,?,204,NULL,?)').bind(requestId, workspaceId, request.method, url.pathname, new Date().toISOString()).run(); return new Response(null, { status: 204 }) }
+  return error('Método no permitido.', 405)
 }
 
-async function createEvent(request: Request, env: Env) {
-  const input = validateEvent(await readJson(request))
-  const id = crypto.randomUUID()
-  await env.CALENDAR_DB.prepare(
-    `INSERT INTO calendar_events (id, title, start_at, end_at, is_all_day, calendar_id, description, location)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(id, input.title, input.start, input.end, input.isAllDay ? 1 : 0, input.calendarId, input.description, input.location).run()
-  const row = await env.CALENDAR_DB.prepare('SELECT * FROM calendar_events WHERE id = ?').bind(id).first()
-  return json({ event: eventFromRow(row as Record<string, unknown>) }, 201)
+export async function signedWebhookRequest(env: Env, outbox: Record<string, unknown>) {
+  if (!env.CRM_WEBHOOK_URL || !env.CALENDAR_SYNC_SECRET) throw new Error('crm_webhook_not_configured')
+  const destination = new URL(env.CRM_WEBHOOK_URL); if (destination.protocol !== 'https:' || destination.hostname !== 'crm.mipolitico.com' || destination.pathname !== '/api/integrations/calendar/webhook') throw new Error('crm_webhook_destination_invalid')
+  const body = JSON.stringify({ id: outbox.id, type: outbox.event_type, workspaceId: outbox.workspace_id, occurredAt: outbox.created_at, ...JSON.parse(String(outbox.payload_json)) }); const timestamp = String(Date.now()); const canonical = `${timestamp}.POST.${destination.pathname}.${await sha256(body)}`; const signature = hex(await hmacBytes(canonical, env.CALENDAR_SYNC_SECRET))
+  const init: RequestInit = { method: 'POST', headers: { 'content-type': 'application/json', 'x-calendar-timestamp': timestamp, 'x-calendar-signature': signature, 'x-calendar-request-id': String(outbox.id) }, body, redirect: 'manual', signal: AbortSignal.timeout(10_000) }
+  if (env.CRM_SERVICE) return env.CRM_SERVICE.fetch(new Request(`https://crm.internal${destination.pathname}`, init))
+  return fetch(destination, init)
 }
 
-async function updateEvent(request: Request, env: Env, id: string) {
-  const input = validateEvent(await readJson(request))
-  const result = await env.CALENDAR_DB.prepare(
-    `UPDATE calendar_events SET title = ?, start_at = ?, end_at = ?, is_all_day = ?, calendar_id = ?,
-     description = ?, location = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
-  ).bind(input.title, input.start, input.end, input.isAllDay ? 1 : 0, input.calendarId, input.description, input.location, id).run()
-  if (!result.meta.changes) return error('Evento no encontrado.', 404)
-  const row = await env.CALENDAR_DB.prepare('SELECT * FROM calendar_events WHERE id = ?').bind(id).first()
-  return json({ event: eventFromRow(row as Record<string, unknown>) })
-}
-
-async function deleteEvent(env: Env, id: string) {
-  const result = await env.CALENDAR_DB.prepare('DELETE FROM calendar_events WHERE id = ?').bind(id).run()
-  if (!result.meta.changes) return error('Evento no encontrado.', 404)
-  return new Response(null, { status: 204 })
-}
-
-async function handleApi(request: Request, env: Env) {
-  const url = new URL(request.url)
-  if (url.pathname === '/api/health' && request.method === 'GET') {
-    const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>()
-    return json({ ok: db?.ok === 1, service: 'mipolitico-calendar' })
+export async function drainWebhookOutbox(env: Env) {
+  const now = new Date().toISOString(); const rows = await env.CALENDAR_DB.prepare("SELECT * FROM calendar_webhook_outbox WHERE status IN ('pending','failed') AND next_attempt_at<=? ORDER BY created_at LIMIT 25").bind(now).all<Record<string, unknown>>()
+  for (const row of rows.results) {
+    const claimed = await env.CALENDAR_DB.prepare("UPDATE calendar_webhook_outbox SET status='delivering',attempts=attempts+1,updated_at=? WHERE id=? AND status IN ('pending','failed')").bind(now, row.id).run(); if (Number(claimed.meta.changes) !== 1) continue
+    try { const response = await signedWebhookRequest(env, row); if (!response.ok) { const detail = (await response.text()).slice(0, 240); throw new Error(`crm_webhook_http_${response.status}:${detail}`) } await env.CALENDAR_DB.prepare("UPDATE calendar_webhook_outbox SET status='delivered',last_error=NULL,updated_at=? WHERE id=?").bind(new Date().toISOString(), row.id).run() }
+    catch (caught) { const attempts = Number(row.attempts ?? 0) + 1; const next = new Date(Date.now() + Math.min(3600, 2 ** Math.min(attempts, 10) * 5) * 1000).toISOString(); await env.CALENDAR_DB.prepare("UPDATE calendar_webhook_outbox SET status='failed',last_error=?,next_attempt_at=?,updated_at=? WHERE id=?").bind(String(caught).slice(0, 500), next, new Date().toISOString(), row.id).run() }
   }
+}
+
+async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
+  const url = new URL(request.url)
+  if (url.pathname.startsWith('/api/internal/')) return handleInternalApi(request, env)
+  if (url.pathname === '/api/health' && request.method === 'GET') { const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>(); return json({ ok: db?.ok === 1, service: 'mipolitico-calendar', crmSyncConfigured: Boolean(env.CALENDAR_SYNC_SECRET && env.CRM_WEBHOOK_URL) }) }
   if (url.pathname === '/api/auth/session' && request.method === 'GET') return json({ authenticated: await isAdmin(request, env) })
-  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-    if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403)
-    const body = await readJson(request) as { password?: unknown }
-    const password = typeof body.password === 'string' ? body.password : ''
-    if (!env.CALENDAR_ADMIN_PASSWORD || password.length > 512 || !equalBytes(await digest(password), await digest(env.CALENDAR_ADMIN_PASSWORD))) {
-      return error('Credenciales inválidas.', 401)
-    }
-    const expires = String(Date.now() + SESSION_TTL_SECONDS * 1000)
-    const token = `${expires}.${await hmac(expires, env.SESSION_SECRET)}`
-    return json({ authenticated: true }, 200, {
-      'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}`,
-    })
-  }
-  if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-    if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403)
-    return json({ authenticated: false }, 200, {
-      'set-cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-    })
-  }
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); const body = await readJson(request) as { password?: unknown }; const password = typeof body.password === 'string' ? body.password : ''; if (!env.CALENDAR_ADMIN_PASSWORD || password.length > 512 || !equalBytes(await digest(password), await digest(env.CALENDAR_ADMIN_PASSWORD))) return error('Credenciales inválidas.', 401); const expires = String(Date.now() + SESSION_TTL_SECONDS * 1000); const token = `${expires}.${await hmac(expires, env.SESSION_SECRET)}`; return json({ authenticated: true }, 200, { 'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` }) }
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); return json({ authenticated: false }, 200, { 'set-cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` }) }
+  if (url.pathname === '/api/workspaces' && request.method === 'GET') { if (!(await isAdmin(request, env))) return error('Autenticación requerida.', 401); const rows = await env.CALENDAR_DB.prepare('SELECT id,name,source,updated_at as updatedAt FROM calendar_workspaces ORDER BY name,id').all(); return json({ workspaces: rows.results }) }
   if (url.pathname === '/api/events' && request.method === 'GET') return listEvents(request, env)
   if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403)
   if (!(await isAdmin(request, env))) return error('Autenticación requerida.', 401)
-  if (url.pathname === '/api/events' && request.method === 'POST') return createEvent(request, env)
-  const match = url.pathname.match(/^\/api\/events\/([0-9a-f-]{36})$/u)
-  if (match && request.method === 'PUT') return updateEvent(request, env, match[1])
-  if (match && request.method === 'DELETE') return deleteEvent(env, match[1])
+  if (url.pathname === '/api/events' && request.method === 'POST') return createEvent(request, env, ctx)
+  const match = url.pathname.match(/^\/api\/events\/([A-Za-z0-9][A-Za-z0-9_.:@-]{0,191})$/u)
+  if (match && request.method === 'PUT') return updateEvent(request, env, match[1], ctx)
+  if (match && request.method === 'DELETE') return deleteEvent(env, workspaceForRequest(request, true), match[1], ctx)
   return error('Ruta no encontrada.', 404)
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    try {
-      const url = new URL(request.url)
-      if (url.pathname.startsWith('/api/')) return await handleApi(request, env)
-      const response = await env.ASSETS.fetch(request)
-      const headers = new Headers(response.headers)
-      headers.set('x-content-type-options', 'nosniff')
-      headers.set('referrer-policy', 'strict-origin-when-cross-origin')
-      headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()')
-      headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
-    } catch (caught) {
-      console.error('request_failed', caught instanceof Error ? caught.message : 'unknown')
-      if (new URL(request.url).pathname.startsWith('/api/')) {
-        const message = caught instanceof Error ? caught.message : 'Error inesperado.'
-        return error(message, message.includes('JSON') || message.includes('válid') || message.includes('límite') ? 400 : 500)
-      }
-      return new Response('Internal Server Error', { status: 500 })
-    }
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try { const url = new URL(request.url); if (url.pathname.startsWith('/api/')) return await handleApi(request, env, ctx); const response = await env.ASSETS.fetch(request); const headers = new Headers(response.headers); headers.set('x-content-type-options', 'nosniff'); headers.set('referrer-policy', 'strict-origin-when-cross-origin'); headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()'); headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }) }
+    catch (caught) { console.error('request_failed', caught instanceof Error ? caught.message : 'unknown'); if (new URL(request.url).pathname.startsWith('/api/')) { const message = caught instanceof Error ? caught.message : 'Error inesperado.'; return error(message, message.includes('JSON') || message.includes('válid') || message.includes('límite') ? 400 : 500) } return new Response('Internal Server Error', { status: 500 }) }
   },
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(drainWebhookOutbox(env)) },
 } satisfies ExportedHandler<Env>
