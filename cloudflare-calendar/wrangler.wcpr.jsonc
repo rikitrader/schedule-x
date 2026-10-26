@@ -14,7 +14,11 @@
     // WCPR Mail employee accounts. The calendar only runs SELECTs against it.
     { "binding": "AUTH_DB", "database_name": "wcpr-inbox-auth", "database_id": "5258aa2b-0e10-4146-930f-27dfff11706b" }
   ],
-  "services": [{ "binding": "CRM_SERVICE", "service": "wcpr-crm" }],
+  "services": [
+    { "binding": "CRM_SERVICE", "service": "wcpr-crm" },
+    // Project-hub SSO: this project's own hub only (sessions from another hub are unknown to it).
+    { "binding": "HUB", "service": "wcpr-hub", "entrypoint": "HubRpc" }
+  ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "BRAND_NAME": "WCPR",
@@ -24,6 +28,10 @@
     "AUTH_MODE": "employee",
     "AUTH_PROVIDER": "wcpr-employees",
     "WORKSPACE_ID": "b633df69-d087-4422-a2ec-86651a400602",
+    "HUB_PROJECT": "wcpr",
+    "HUB_LOGIN_URL": "https://hub.wcpr.pro/login?next=/go/calendar",
+    // Fallback while hub SSO is being verified: local password form at /?local=1. Set to "false" to make the hub the only sign-in.
+    "LOCAL_LOGIN": "true",
     "ADMIN_EMAILS": "rprieto@wcpr.pro",
     "CRM_HOST": "crm.wcpr.pro",
     "CRM_WEBHOOK_URL": "https://crm.wcpr.pro/api/integrations/calendar/webhook"

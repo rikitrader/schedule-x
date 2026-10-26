@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
-import { SESSION_COOKIE, SESSION_TTL_SECONDS } from './auth'
+import { resolvePrincipal, SESSION_COOKIE, SESSION_TTL_SECONDS } from './auth'
 import { handleAdmin, handleEmployeeApi, type EventDeps } from './departments'
+import { handleHubSignIn, hubConfigured, localLoginAllowed } from './hub'
 import { isMessageKey, t, type Locale } from './i18n'
 import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, type Env } from './tenant'
 import { ClientError, digest, encoder, equalBytes, error, hex, hmac, hmacBytes, json, readCookie, requireSameOrigin, sha256 } from './util'
@@ -120,7 +121,7 @@ function tenantHtml(response: Response, env: Env) {
     .on('html', { element(element) { element.setAttribute('lang', lang) } })
     .on('title', { element(element) { element.setInnerContent(`${t(lang, 'brandSub')} | ${brand}`) } })
     .on('meta[name="description"]', { element(element) { element.setAttribute('content', `${t(lang, 'pageTitle', brand)}.`) } })
-    .on('body', { element(element) { element.setAttribute('data-locale', lang); element.setAttribute('data-auth-mode', employeeMode(env) ? 'employee' : 'password'); element.setAttribute('data-timezone', timezone(env)); element.setAttribute('data-brand', brand) } })
+    .on('body', { element(element) { if (hubConfigured(env)) { element.setAttribute('data-hub-url', new URL('/', env.HUB_LOGIN_URL).toString()); if (localLoginAllowed(env)) element.setAttribute('data-local-login', 'true') } element.setAttribute('data-locale', lang); element.setAttribute('data-auth-mode', employeeMode(env) ? 'employee' : 'password'); element.setAttribute('data-timezone', timezone(env)); element.setAttribute('data-brand', brand) } })
     .on('.brand', { element(element) { element.setAttribute('aria-label', `${brand} ${t(lang, 'brandSub')}`) } })
     .on('.brand-mark', { element(element) { element.setInnerContent(brand.slice(0, 1).toUpperCase()) } })
     .on('.brand strong', { element(element) { element.setInnerContent(brand) } })
@@ -133,6 +134,7 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url)
   if (url.pathname.startsWith('/api/internal/')) return handleInternalApi(request, env)
   if (url.pathname === '/api/health' && request.method === 'GET') { const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>(); return json({ ok: db?.ok === 1, service: serviceName(env), crmSyncConfigured: Boolean(env.CALENDAR_SYNC_SECRET && env.CRM_WEBHOOK_URL) }) }
+  if (url.pathname === '/api/auth/hub' && request.method === 'GET' && employeeMode(env)) return handleHubSignIn(request, env)
   if (employeeMode(env)) return handleEmployeeApi(request, env, ctx, employeeDeps(env))
   if (url.pathname === '/api/auth/session' && request.method === 'GET') return json({ authenticated: await isAdmin(request, env) })
   if (url.pathname === '/api/auth/login' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); const body = await readJson(request) as { password?: unknown }; const password = typeof body.password === 'string' ? body.password : ''; if (!env.CALENDAR_ADMIN_PASSWORD || password.length > 512 || !equalBytes(await digest(password), await digest(env.CALENDAR_ADMIN_PASSWORD))) return error('Credenciales inválidas.', 401); const expires = String(Date.now() + SESSION_TTL_SECONDS * 1000); const token = `${expires}.${await hmac(expires, env.SESSION_SECRET)}`; return json({ authenticated: true }, 200, { 'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` }) }
@@ -150,7 +152,7 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    try { const url = new URL(request.url); if (url.pathname.startsWith('/api/')) return await handleApi(request, env, ctx); if (url.pathname === '/admin' && employeeMode(env)) return await handleAdmin(request, env); const assetResponse = await env.ASSETS.fetch(request); const response = !isDefaultTenant(env) && (assetResponse.headers.get('content-type') || '').includes('text/html') ? tenantHtml(assetResponse, env) : assetResponse; const headers = new Headers(response.headers); headers.set('x-content-type-options', 'nosniff'); headers.set('referrer-policy', 'strict-origin-when-cross-origin'); headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()'); headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }) }
+    try { const url = new URL(request.url); if (url.pathname.startsWith('/api/')) return await handleApi(request, env, ctx); if (url.pathname === '/admin' && employeeMode(env)) return await handleAdmin(request, env); if (url.pathname === '/' && request.method === 'GET' && employeeMode(env) && hubConfigured(env) && !(url.searchParams.get('local') === '1' && localLoginAllowed(env)) && !(await resolvePrincipal(request, env))) return new Response(null, { status: 302, headers: { location: '/api/auth/hub', 'cache-control': 'no-store' } }); const assetResponse = await env.ASSETS.fetch(request); const response = !isDefaultTenant(env) && (assetResponse.headers.get('content-type') || '').includes('text/html') ? tenantHtml(assetResponse, env) : assetResponse; const headers = new Headers(response.headers); headers.set('x-content-type-options', 'nosniff'); headers.set('referrer-policy', 'strict-origin-when-cross-origin'); headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()'); headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }) }
     catch (caught) { console.error('request_failed', caught instanceof Error ? caught.message : 'unknown'); if (new URL(request.url).pathname.startsWith('/api/')) { const message = caught instanceof Error ? caught.message : 'Error inesperado.'; if (caught instanceof ClientError) return error(message, caught.status); return error(message, message.includes('JSON') || message.includes('válid') || message.includes('límite') ? 400 : 500) } return new Response('Internal Server Error', { status: 500 }) }
   },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(drainWebhookOutbox(env)) },

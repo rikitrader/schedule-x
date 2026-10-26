@@ -1,4 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
+import type { HubBinding } from './hub'
 import type { Locale } from './i18n'
 
 export interface Env {
@@ -21,6 +22,11 @@ export interface Env {
   AUTH_DB?: D1Database
   WORKSPACE_ID?: string
   ADMIN_EMAILS?: string
+  // Project-hub SSO (employee mode). HUB is a service binding to this project's own hub (entrypoint HubRpc).
+  HUB?: HubBinding
+  HUB_PROJECT?: string
+  HUB_LOGIN_URL?: string
+  LOCAL_LOGIN?: string
 }
 
 // Webhook destinations are pinned to this allowlist so a config typo can never ship events to another project's CRM.

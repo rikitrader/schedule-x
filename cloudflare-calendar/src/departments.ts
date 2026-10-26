@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { employeeSessionCookie, resolvePrincipal, roleAtLeast, SESSION_COOKIE, validEmail, verifyEmployeeLogin, type Principal, type Role } from './auth'
 import { t, type MessageKey } from './i18n'
+import { hubConfigured, localLoginAllowed } from './hub'
 import { brandName, employeeWorkspace, locale, type Env } from './tenant'
 import { ClientError, error, escapeHtml, json, requireSameOrigin } from './util'
 
@@ -31,7 +32,7 @@ async function visibleDepartments(env: Env, principal: Principal) {
 }
 
 async function sessionBody(env: Env, principal: Principal) {
-  return { authenticated: true, user: { email: principal.email, name: principal.name, admin: principal.admin, kind: principal.kind }, departments: await visibleDepartments(env, principal) }
+  return { authenticated: true, hub: hubConfigured(env), user: { email: principal.email, name: principal.name, admin: principal.admin, kind: principal.kind }, departments: await visibleDepartments(env, principal) }
 }
 
 async function listDepartmentEvents(request: Request, env: Env, principal: Principal, deps: EventDeps) {
@@ -81,6 +82,7 @@ export async function handleEmployeeApi(request: Request, env: Env, ctx: Executi
   const url = new URL(request.url)
   if (url.pathname === '/api/auth/login' && request.method === 'POST') {
     if (!requireSameOrigin(request)) return deny(env, 'badOrigin', 403)
+    if (!localLoginAllowed(env)) return deny(env, 'forbidden', 403)
     const body = await deps.readJson(request) as { email?: unknown; password?: unknown }; const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''; const password = typeof body.password === 'string' ? body.password : ''
     if (!validEmail(email) || !password || password.length > 512) return deny(env, 'invalidCredentials', 401)
     const result = await verifyEmployeeLogin(env, email, password); if (!result.ok) return deny(env, result.key, result.status)

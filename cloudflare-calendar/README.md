@@ -82,6 +82,10 @@ Departments work like shared inboxes. Every event has a `department_key`; employ
 - Each department agent gets its own bearer token (`calagt_…`, SHA-256 stored) scoped to its department as operator. Reassigning or disabling a department invalidates its token. Issue with `node scripts/issue-agent-tokens.mjs seeds/<project>.sql <vault>/Credentials.local.md <out.sql>` and apply the SQL with `wrangler d1 execute`.
 - CRM upserts never change an event's department; new CRM-origin events land in `general`.
 
+### Project-hub SSO
+
+WCPR and Mozaico calendars sign in through their own project hub (`HUB` service binding → `<project>-hub`, entrypoint `HubRpc`). The hub tile lands on `/` (or `/api/auth/hub`). The calendar calls `HUB.verify(cookie, "calendar")`, refuses sessions from any other project's hub, and issues its own hub-linked session. That session ends within 15 seconds of the hub session ending. Hub levels map to roles: Owner → admin, Manager → manager on every department, Staff → operator on their hub departments, Limited → viewer on their hub departments. Explicit calendar grants can only raise access. With no session, `/` redirects to the hub. The local password form is only a fallback at `/?local=1` while `LOCAL_LOGIN=true`.
+
 Provision a tenant:
 
 ```bash
