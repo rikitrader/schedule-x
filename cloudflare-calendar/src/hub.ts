@@ -39,13 +39,16 @@ export async function hubIdentity(request: Request, env: Env): Promise<HubResult
   const cookie = request.headers.get('cookie') || ''; if (!cookie || cookie.length > 8192) return { status: 'none' }
   const key = `${env.HUB_PROJECT}:${await sha256(cookie)}`; const cached = cache.get(key)
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.result
-  const who = await env.HUB!.verify(cookie, HUB_APP_KEY).catch(() => ({ ok: false, project: '', reason: 'hub_unavailable' }) as HubIdentity)
+  const who = await env.HUB!.verify(cookie, HUB_APP_KEY).catch((caught: unknown) => { console.error('hub_verify_failed', caught instanceof Error ? caught.message : String(caught)); return { ok: false, project: '', reason: 'hub_unavailable' } as HubIdentity })
   const result: HubResult = !who.ok ? { status: 'none' }
     : who.project !== env.HUB_PROJECT ? { status: 'denied', reason: 'wrong_project' }
     : who.reason === 'password_change_required' ? { status: 'denied', reason: 'password_change_required' }
     : !who.allowed ? { status: 'denied', reason: 'app_denied' }
     : { status: 'ok', user: { email: who.email.trim().toLowerCase(), name: who.name || who.email, level: who.level, departments: who.departments } }
-  cache.set(key, { at: Date.now(), result }); return result
+  // Only positive and denied answers are cached: a fresh hub sign-in must take effect on the very next request.
+  if (result.status !== 'none') cache.set(key, { at: Date.now(), result })
+  if (result.status === 'denied') console.warn('hub_denied', result.reason)
+  return result
 }
 
 const SAFE_RETURN = /^\/(?!\/)[A-Za-z0-9/_.~%=&?:@+,-]{0,500}$/u

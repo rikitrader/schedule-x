@@ -108,6 +108,19 @@ describe('hub-only employee calendars', () => {
     expect(state.calls).toEqual([`calendar:${cookie}`])
   })
 
+  it('serves HTML as no-store and hashed assets as immutable', async () => {
+    const { env } = hubEnv(identity())
+    expect((await call(env, '/', withHub())).headers.get('cache-control')).toBe('no-store')
+    expect((await call(env, '/assets/index-abc.js', withHub())).headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+  })
+
+  it('does not cache a missing hub session, so a fresh hub sign-in works immediately', async () => {
+    const { env, state } = hubEnv({ ok: false, project: 'wcpr', reason: 'no_session' })
+    expect((await call(env, '/', withHub())).status).toBe(302)
+    state.who = identity()
+    expect((await call(env, '/', withHub())).status).toBe(200)
+  })
+
   it('stops honoring the hub cookie once the hub session ends', async () => {
     const { env, state } = hubEnv(identity())
     expect((await session(env)).authenticated).toBe(true)
