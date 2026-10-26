@@ -1,10 +1,11 @@
 /// <reference types="@cloudflare/workers-types" />
-import { bearerToken, principalFromHub, resolvePrincipal, SESSION_COOKIE, SESSION_TTL_SECONDS, type Principal } from './auth'
+import { adminPasswordLogin, adminPasswordLogout, adminPasswordSession } from './admin-password'
+import { bearerToken, principalFromHub, resolvePrincipal, type Principal } from './auth'
 import { handleAdmin, handleEmployeeApi, type EventDeps } from './departments'
 import { hubConfigured, hubDeniedPage, hubFixUrl, hubHome, hubIdentity, hubLoginRedirect, hubRequired, pendingReturn } from './hub'
 import { isMessageKey, t, type Locale } from './i18n'
 import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, type Env } from './tenant'
-import { ClientError, digest, encoder, equalBytes, error, hex, hmac, hmacBytes, json, readCookie, requireSameOrigin, sha256 } from './util'
+import { ClientError, encoder, equalBytes, error, hex, hmacBytes, json, requireSameOrigin, sha256 } from './util'
 
 export type { Env }
 
@@ -14,9 +15,8 @@ const SIGNATURE_WINDOW_MS = 5 * 60 * 1000
 function validWorkspaceId(value: string | null): value is string { return Boolean(value && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(value)) }
 function validEventId(value: string) { return /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,191}$/u.test(value) }
 
-async function passwordSession(request: Request, env: Env) { const token = readCookie(request, SESSION_COOKIE); if (!token || env.SESSION_SECRET.length < 32) return false; const [expires, signature] = token.split('.'); if (!expires || !signature || !/^\d+$/u.test(expires) || Number(expires) <= Date.now()) return false; const expected = await hmac(expires, env.SESSION_SECRET); return equalBytes(encoder.encode(signature), encoder.encode(expected)) }
 // Password-mode (MiPolitico) administrators: hub Owner/Manager/Staff, or the shared password until HUB_REQUIRED=true.
-async function isAdmin(request: Request, env: Env) { const hub = await hubIdentity(request, env); if (hub.status === 'ok' && hub.user.level <= 3) return true; return !hubRequired(env) && passwordSession(request, env) }
+async function isAdmin(request: Request, env: Env) { const hub = await hubIdentity(request, env); if (hub.status === 'ok' && hub.user.level <= 3) return true; return !hubRequired(env) && adminPasswordSession(request, env) }
 async function readJson(request: Request, lang: Locale = 'es') { const type = request.headers.get('content-type') || ''; if (!type.toLowerCase().startsWith('application/json')) throw new ClientError(t(lang, 'mustBeJson')); return request.json() }
 
 function validateEvent(value: unknown, lang: Locale = 'es'): EventInput {
@@ -140,8 +140,8 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
   if (url.pathname.startsWith('/api/internal/')) return handleInternalApi(request, env)
   if (url.pathname === '/api/health' && request.method === 'GET') { const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>(); return json({ ok: db?.ok === 1, service: serviceName(env), crmSyncConfigured: Boolean(env.CALENDAR_SYNC_SECRET && env.CRM_WEBHOOK_URL) }) }
   if (url.pathname === '/api/auth/session' && request.method === 'GET') return json({ authenticated: await isAdmin(request, env) })
-  if (url.pathname === '/api/auth/login' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); if (hubRequired(env)) return error('Inicia sesión desde el hub.', 403); const body = await readJson(request) as { password?: unknown }; const password = typeof body.password === 'string' ? body.password : ''; if (!env.CALENDAR_ADMIN_PASSWORD || password.length > 512 || !equalBytes(await digest(password), await digest(env.CALENDAR_ADMIN_PASSWORD))) return error('Credenciales inválidas.', 401); const expires = String(Date.now() + SESSION_TTL_SECONDS * 1000); const token = `${expires}.${await hmac(expires, env.SESSION_SECRET)}`; return json({ authenticated: true }, 200, { 'set-cookie': `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}` }) }
-  if (url.pathname === '/api/auth/logout' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); return json({ authenticated: false }, 200, { 'set-cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` }) }
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); if (hubRequired(env)) return error('Inicia sesión desde el hub.', 403); return adminPasswordLogin(request, env, await readJson(request) as { password?: unknown }) }
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); return adminPasswordLogout(request, env) }
   if (url.pathname === '/api/workspaces' && request.method === 'GET') { if (!(await isAdmin(request, env))) return error('Autenticación requerida.', 401); const rows = await env.CALENDAR_DB.prepare('SELECT id,name,source,updated_at as updatedAt FROM calendar_workspaces ORDER BY name,id').all(); return json({ workspaces: rows.results }) }
   if (url.pathname === '/api/events' && request.method === 'GET') return listEvents(request, env)
   if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403)
@@ -153,7 +153,7 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
   return error('Ruta no encontrada.', 404)
 }
 
-const HSTS = 'max-age=31536000; includeSubDomains'
+const HSTS = 'max-age=63072000; includeSubDomains; preload'
 function securedAsset(response: Response) { const headers = new Headers(response.headers); headers.set('x-content-type-options', 'nosniff'); headers.set('referrer-policy', 'strict-origin-when-cross-origin'); headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()'); headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }) }
 // HTML is per-user (gated, tenant-rewritten) and must never be reused from a cache; Vite's hashed /assets/* files never change.
 async function serveAsset(request: Request, env: Env) {

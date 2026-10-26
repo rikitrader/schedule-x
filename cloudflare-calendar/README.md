@@ -87,8 +87,8 @@ The calendar has no login of its own on WCPR and Mozaico. Every request hands th
 
 - No hub session: GET requests get a 302 to the hub login and come back to the original page afterwards (via a short-lived return cookie). Writes get a 401. Only `/api/health` and the signed internal CRM sync API answer without a hub session. Department agents may use their bearer token on `/api/events` and `/api/departments` only.
 - Hub levels map to roles: Owner → admin, Manager → manager on every department, Staff → operator on their hub departments, Limited → viewer on their hub departments. Explicit calendar grants can only raise access.
-- Every response sends HSTS, and plain HTTP gets a 301 to HTTPS.
-- MiPolitico: hub Owner/Manager/Staff count as administrators. Public viewing and the shared admin password remain until `HUB_REQUIRED=true`, after which the gate applies to every page there too.
+- Every response sends `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`, and plain HTTP gets a 301 to HTTPS.
+- MiPolitico: hub Owner/Manager/Staff count as administrators. The shared admin password fallback is throttled in fixed 15-minute windows (5 failures per IP, 50 globally, then 429) and its sessions are 1-hour server-side rows in `calendar_admin_sessions` (logout revokes; delete rows to end all). Public viewing and the shared admin password remain until `HUB_REQUIRED=true`, after which the gate applies to every page there too.
 
 Provision a tenant:
 

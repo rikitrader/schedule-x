@@ -146,7 +146,7 @@ describe('hub-only employee calendars', () => {
     const { env } = hubEnv(identity())
     const plain = await call(env, '/admin?x=1', {}, 'http://calendar.wcpr.pro')
     expect([plain.status, plain.headers.get('location')]).toEqual([301, 'https://calendar.wcpr.pro/admin?x=1'])
-    for (const response of [plain, await call(env, '/api/health'), await call(env, '/', withHub()), await call(hubEnv({ ok: false, project: 'wcpr', reason: 'no_session' }).env, '/')]) expect(response.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains')
+    for (const response of [plain, await call(env, '/api/health'), await call(env, '/', withHub()), await call(hubEnv({ ok: false, project: 'wcpr', reason: 'no_session' }).env, '/')]) expect(response.headers.get('strict-transport-security')).toBe('max-age=63072000; includeSubDomains; preload')
   })
 })
 
@@ -165,6 +165,30 @@ describe('MiPolitico password mode with optional hub', () => {
     __resetHubCache()
     const limited = mipolitico(identity({ project: 'mipolitico', level: 4 }))
     expect(await (await call(limited.env, '/api/auth/session', { headers: { cookie: HUB_COOKIE } }, MIP)).json()).toEqual({ authenticated: false })
+  })
+
+  it('throttles the shared password per IP and globally, with a lockout window', async () => {
+    const { env } = mipolitico({ ok: false, project: 'mipolitico', reason: 'no_session' })
+    const attempt = (password: string, ip = '203.0.113.7') => call(env, '/api/auth/login', { method: 'POST', headers: { origin: MIP, 'content-type': 'application/json', 'cf-connecting-ip': ip }, body: JSON.stringify({ password }) }, MIP)
+    for (let i = 0; i < 5; i += 1) expect((await attempt(`wrong-${i}`)).status).toBe(401)
+    expect((await attempt('mipolitico-admin-password')).status).toBe(429)
+    expect((await attempt('mipolitico-admin-password', '198.51.100.9')).status).toBe(200)
+    for (let i = 0; i < 45; i += 1) await attempt(`wrong-${i}`, `192.0.2.${i}`)
+    expect((await attempt('mipolitico-admin-password', '198.51.100.10')).status).toBe(429)
+  })
+
+  it('keeps admin password sessions server-side: logout revokes, legacy stateless tokens are refused', async () => {
+    const { env } = mipolitico({ ok: false, project: 'mipolitico', reason: 'no_session' })
+    const login = await call(env, '/api/auth/login', { method: 'POST', headers: { origin: MIP, 'content-type': 'application/json' }, body: '{"password":"mipolitico-admin-password"}' }, MIP)
+    const cookie = (login.headers.get('set-cookie') || '').split(';')[0]
+    expect(login.headers.get('set-cookie')).toContain('Max-Age=3600')
+    expect(cookie).toMatch(/^__Host-calendar_session=ps\.[A-Za-z0-9_-]{43}$/u)
+    const session = () => call(env, '/api/auth/session', { headers: { cookie } }, MIP).then((response) => response.json())
+    expect(await session()).toEqual({ authenticated: true })
+    expect((await call(env, '/api/auth/logout', { method: 'POST', headers: { origin: MIP, cookie, 'content-type': 'application/json' }, body: '{}' }, MIP)).status).toBe(200)
+    expect(await session()).toEqual({ authenticated: false })
+    const legacy = `__Host-calendar_session=${Date.now() + 3_600_000}.signature-that-used-to-be-hmac`
+    expect(await (await call(env, '/api/auth/session', { headers: { cookie: legacy } }, MIP)).json()).toEqual({ authenticated: false })
   })
 
   it('requires the hub for everything once HUB_REQUIRED=true', async () => {
