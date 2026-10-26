@@ -4,8 +4,9 @@ import { employeeMode, type Env } from './tenant'
 import { escapeHtml, readCookie, sha256 } from './util'
 
 // Project-hub single sign-on (rikitrader/project-hub, contract src/rpc.ts). The hub owns identity and
-// app authorization; the calendar has no login of its own. Every request hands the browser's hub_session
-// cookie (scoped to the project's parent domain) to HUB.verify over the service binding. No secret is
+// app authorization; the calendar has no login of its own. Every request hands the browser's whole Cookie
+// header to HUB.verify over the service binding; the hub alone knows its cookie name (hub_session is being
+// renamed to __Secure-hub_session). No secret is
 // shared, so another project's hub session is unknown here, and the project field is checked anyway.
 export type HubIdentity =
   | { ok: true; project: string; sessionId: string; userId: string; email: string; name: string; level: number; levelName: string; departments: string[]; allowed: boolean; reason?: string }
@@ -17,7 +18,6 @@ export type HubResult = { status: 'ok'; user: HubUser } | { status: 'none' } | {
 export const HUB_APP_KEY = 'calendar'
 const RETURN_COOKIE = '__Host-calendar_return'
 const CACHE_MS = 15_000 // Bounds how long a hub logout or revocation can lag here.
-const HUB_TOKEN = /(?:^|;\s*)hub_session=([A-Za-z0-9_-]{43})(?:;|$)/u
 const cache = new Map<string, { at: number; result: HubResult }>()
 export const __resetHubCache = () => cache.clear()
 
@@ -36,10 +36,10 @@ export function rolesForHubLevel(level: number, departments: string[], allDepart
 
 export async function hubIdentity(request: Request, env: Env): Promise<HubResult> {
   if (!hubConfigured(env)) return { status: 'none' }
-  const token = (request.headers.get('cookie') || '').match(HUB_TOKEN)?.[1]; if (!token) return { status: 'none' }
-  const key = `${env.HUB_PROJECT}:${await sha256(token)}`; const cached = cache.get(key)
+  const cookie = request.headers.get('cookie') || ''; if (!cookie || cookie.length > 8192) return { status: 'none' }
+  const key = `${env.HUB_PROJECT}:${await sha256(cookie)}`; const cached = cache.get(key)
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.result
-  const who = await env.HUB!.verify(`hub_session=${token}`, HUB_APP_KEY).catch(() => ({ ok: false, project: '', reason: 'hub_unavailable' }) as HubIdentity)
+  const who = await env.HUB!.verify(cookie, HUB_APP_KEY).catch(() => ({ ok: false, project: '', reason: 'hub_unavailable' }) as HubIdentity)
   const result: HubResult = !who.ok ? { status: 'none' }
     : who.project !== env.HUB_PROJECT ? { status: 'denied', reason: 'wrong_project' }
     : who.reason === 'password_change_required' ? { status: 'denied', reason: 'password_change_required' }
