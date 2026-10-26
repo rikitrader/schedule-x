@@ -155,7 +155,14 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
 
 const HSTS = 'max-age=31536000; includeSubDomains'
 function securedAsset(response: Response) { const headers = new Headers(response.headers); headers.set('x-content-type-options', 'nosniff'); headers.set('referrer-policy', 'strict-origin-when-cross-origin'); headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()'); headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"); return new Response(response.body, { status: response.status, statusText: response.statusText, headers }) }
-async function serveAsset(request: Request, env: Env) { const assetResponse = await env.ASSETS.fetch(request); const html = (assetResponse.headers.get('content-type') || '').includes('text/html'); return securedAsset(html && (!isDefaultTenant(env) || hubConfigured(env)) ? tenantHtml(assetResponse, env) : assetResponse) }
+// HTML is per-user (gated, tenant-rewritten) and must never be reused from a cache; Vite's hashed /assets/* files never change.
+async function serveAsset(request: Request, env: Env) {
+  const assetResponse = await env.ASSETS.fetch(request); const html = (assetResponse.headers.get('content-type') || '').includes('text/html')
+  const response = securedAsset(html && (!isDefaultTenant(env) || hubConfigured(env)) ? tenantHtml(assetResponse, env) : assetResponse)
+  if (html) { response.headers.set('cache-control', 'no-store'); response.headers.delete('etag') }
+  else if (new URL(request.url).pathname.startsWith('/assets/') && response.ok) response.headers.set('cache-control', 'public, max-age=31536000, immutable')
+  return response
+}
 const AGENT_PATHS = /^\/api\/(?:departments|events(?:\/[A-Za-z0-9][A-Za-z0-9_.:@-]{0,191})?)$/u
 
 // The hub gate. When the hub is required, nothing but health and the signed CRM sync API answers without a
