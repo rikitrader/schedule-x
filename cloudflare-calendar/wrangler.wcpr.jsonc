@@ -1,0 +1,32 @@
+{
+  // West Coast Precision Roofing — isolated deployment: own D1, own CRM (wcpr-crm), employee login from WCPR Mail.
+  // Deploy: ~/.claude/scripts/ship-deploy.sh "$PWD" -- npx wrangler deploy -c wrangler.wcpr.jsonc
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wcpr-calendar",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-18",
+  "workers_dev": false,
+  "routes": [{ "pattern": "calendar.wcpr.pro", "custom_domain": true }],
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "secrets": { "required": ["SESSION_SECRET", "CALENDAR_SYNC_SECRET"] },
+  "d1_databases": [
+    { "binding": "CALENDAR_DB", "database_name": "wcpr-calendar", "database_id": "2e4f010d-dee8-4754-b0f4-6f5c9a5b3027", "migrations_dir": "migrations" },
+    // WCPR Mail employee accounts. The calendar only runs SELECTs against it.
+    { "binding": "AUTH_DB", "database_name": "wcpr-inbox-auth", "database_id": "5258aa2b-0e10-4146-930f-27dfff11706b" }
+  ],
+  "services": [{ "binding": "CRM_SERVICE", "service": "wcpr-crm" }],
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    "BRAND_NAME": "WCPR",
+    "SERVICE_NAME": "wcpr-calendar",
+    "LOCALE": "en",
+    "TIMEZONE": "America/Los_Angeles",
+    "AUTH_MODE": "employee",
+    "AUTH_PROVIDER": "wcpr-employees",
+    "WORKSPACE_ID": "b633df69-d087-4422-a2ec-86651a400602",
+    "ADMIN_EMAILS": "rprieto@wcpr.pro",
+    "CRM_HOST": "crm.wcpr.pro",
+    "CRM_WEBHOOK_URL": "https://crm.wcpr.pro/api/integrations/calendar/webhook"
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 1 }
+}
