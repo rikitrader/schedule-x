@@ -13,7 +13,7 @@ export type HubIdentity =
   | { ok: false; project: string; reason: string }
 export interface HubBinding { verify(cookieOrToken: string, appKey: string): Promise<HubIdentity>; sessionActive(sessionId: string): Promise<boolean> }
 export type HubUser = { email: string; name: string; level: number; departments: string[] }
-export type HubResult = { status: 'ok'; user: HubUser } | { status: 'none' } | { status: 'denied'; reason: 'wrong_project' | 'app_denied' | 'password_change_required' }
+export type HubResult = { status: 'ok'; user: HubUser } | { status: 'none' } | { status: 'denied'; reason: 'wrong_project' | 'app_denied' | 'password_change_required' | 'two_factor_required' }
 
 export const HUB_APP_KEY = 'calendar'
 const RETURN_COOKIE = '__Host-calendar_return'
@@ -43,10 +43,11 @@ export async function hubIdentity(request: Request, env: Env): Promise<HubResult
   const result: HubResult = !who.ok ? { status: 'none' }
     : who.project !== env.HUB_PROJECT ? { status: 'denied', reason: 'wrong_project' }
     : who.reason === 'password_change_required' ? { status: 'denied', reason: 'password_change_required' }
+    : who.reason === 'two_factor_required' ? { status: 'denied', reason: 'two_factor_required' }
     : !who.allowed ? { status: 'denied', reason: 'app_denied' }
     : { status: 'ok', user: { email: who.email.trim().toLowerCase(), name: who.name || who.email, level: who.level, departments: who.departments } }
-  // Only positive and denied answers are cached: a fresh hub sign-in must take effect on the very next request.
-  if (result.status !== 'none') cache.set(key, { at: Date.now(), result })
+  // Only successes are cached: a fresh hub sign-in, password change, or 2FA enrollment must take effect on the very next request.
+  if (result.status === 'ok') cache.set(key, { at: Date.now(), result })
   if (result.status === 'denied') console.warn('hub_denied', result.reason)
   return result
 }
@@ -65,12 +66,16 @@ export function pendingReturn(request: Request) {
   return SAFE_RETURN.test(back) ? new Response(null, { status: 302, headers: { location: back, 'cache-control': 'no-store', 'set-cookie': `${RETURN_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0` } }) : null
 }
 
-const DENIED: Record<Extract<HubResult, { status: 'denied' }>['reason'], [string, string]> = {
+type DeniedReason = Extract<HubResult, { status: 'denied' }>['reason']
+const DENIED: Record<'wrong_project' | 'app_denied', [string, string]> = {
   wrong_project: ['Wrong sign-in', 'This session belongs to a different organization.'],
   app_denied: ['Access denied', 'Your access level does not include the calendar.'],
-  password_change_required: ['Password change required', 'Change your password in the hub, then open the calendar again.'],
 }
-export function hubDeniedPage(env: Env, reason: Extract<HubResult, { status: 'denied' }>['reason']) {
-  const [title, text] = DENIED[reason]; const home = escapeHtml(hubHome(env))
+// Things the user can fix in the hub get sent straight there; the hub finishes the step and returns them to its launcher.
+const HUB_FIX: Partial<Record<DeniedReason, string>> = { two_factor_required: '/security', password_change_required: '/password' }
+export function hubFixUrl(env: Env, reason: DeniedReason) { const path = HUB_FIX[reason]; return path ? new URL(path, hubHome(env)).toString() : null }
+export function hubDeniedPage(env: Env, reason: DeniedReason) {
+  const fix = hubFixUrl(env, reason); if (fix) return new Response(null, { status: 302, headers: { location: fix, 'cache-control': 'no-store' } })
+  const [title, text] = DENIED[reason as 'wrong_project' | 'app_denied']; const home = escapeHtml(hubHome(env))
   return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:440px;margin:15vh auto;padding:0 16px;line-height:1.5"><h1 style="font-size:20px">${title}</h1><p>${text}</p><p><a href="${home}">Go to the hub</a></p></body>`, { status: 403, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'" } })
 }
