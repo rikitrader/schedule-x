@@ -15,6 +15,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand span:last-child { display: grid; line-height: 1.05; }
 .brand small { color: #9eb5d2; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; margin-top: .25rem; }
 .header-actions { display: flex; align-items: center; gap: .75rem; }
+.workspace-picker { display: flex; align-items: center; gap: .45rem; color: #c6d3e3; font-size: .82rem; }
+.workspace-picker select { max-width: 15rem; border: 1px solid #405674; border-radius: 8px; padding: .5rem .65rem; background: #10243f; color: #fff; }
 .auth-status { color: #c6d3e3; font-size: .9rem; }
 main { max-width: 1500px; margin: 0 auto; padding: 2rem clamp(1rem, 4vw, 4rem) 4rem; }
 .intro { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 1.5rem; }

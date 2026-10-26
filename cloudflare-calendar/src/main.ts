@@ -31,10 +31,18 @@ const authDialog = $('#auth-dialog') as HTMLDialogElement
 const eventDialog = $('#event-dialog') as HTMLDialogElement
 const authButton = $('#auth-button') as HTMLButtonElement
 const newButton = $('#new-event') as HTMLButtonElement
+const workspacePicker = document.querySelector('#workspace-picker') as unknown as HTMLSelectElement
+const workspacePickerLabel = $('#workspace-picker-label')
 const status = $('#auth-status')
 const toast = $('#toast')
 let authenticated = false
 let events = new Map<string, ApiEvent>()
+let activeWorkspace = 'public'
+
+function eventApi(path = '') {
+  const query = authenticated ? `?workspace=${encodeURIComponent(activeWorkspace)}` : ''
+  return `/api/events${path}${query}`
+}
 
 function toCalendarEvent(event: ApiEvent): CalendarEventExternal {
   return {
@@ -79,7 +87,7 @@ const calendar = createCalendar({
       if (!existing) return
       const updated = { ...existing, start: event.start.toString(), end: event.end.toString(), isAllDay: event.start instanceof Temporal.PlainDate }
       try {
-        const saved = await request<{ event: ApiEvent }>(`/api/events/${event.id}`, { method: 'PUT', body: JSON.stringify(updated) })
+        const saved = await request<{ event: ApiEvent }>(eventApi(`/${event.id}`), { method: 'PUT', body: JSON.stringify(updated) })
         events.set(saved.event.id, saved.event)
         eventsService.update(toCalendarEvent(saved.event))
         showToast('Evento actualizado.')
@@ -126,6 +134,31 @@ function setAuth(value: boolean) {
   status.textContent = value ? 'Modo administrador' : 'Solo lectura'
   newButton.hidden = !value
   authButton.textContent = value ? 'Cerrar sesión' : 'Administrar'
+  workspacePickerLabel.hidden = !value
+}
+
+async function loadWorkspaces() {
+  if (!authenticated) {
+    activeWorkspace = 'public'
+    workspacePicker.replaceChildren()
+    return
+  }
+  const data = await request<{ workspaces: Array<{ id: string; name: string }> }>('/api/workspaces')
+  const desired = new URLSearchParams(location.search).get('workspace') || activeWorkspace
+  workspacePicker.replaceChildren(...data.workspaces.map((workspace) => {
+    const option = document.createElement('option')
+    option.value = workspace.id
+    option.textContent = workspace.name
+    return option
+  }))
+  activeWorkspace = data.workspaces.some((workspace) => workspace.id === desired) ? desired : data.workspaces[0]?.id || 'public'
+  workspacePicker.value = activeWorkspace
+}
+
+async function loadEvents() {
+  const data = await request<{ events: ApiEvent[] }>(eventApi())
+  events = new Map(data.events.map((event) => [event.id, event]))
+  eventsService.set(data.events.map(toCalendarEvent))
 }
 
 function dateTimeInput(value: string) {
@@ -189,6 +222,8 @@ authButton.addEventListener('click', async () => {
   try {
     await request('/api/auth/logout', { method: 'POST', body: '{}' })
     setAuth(false)
+    await loadWorkspaces()
+    await loadEvents()
     showToast('Sesión cerrada.')
   } catch (caught) { showToast(message(caught), true) }
 })
@@ -200,6 +235,8 @@ $('#auth-form').addEventListener('submit', async (event) => {
     await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
     ;($('#password') as HTMLInputElement).value = ''
     setAuth(true)
+    await loadWorkspaces()
+    await loadEvents()
     authDialog.close()
     showToast('Sesión iniciada.')
   } catch (caught) { $('#auth-error').textContent = message(caught) }
@@ -224,7 +261,7 @@ $('#event-form').addEventListener('submit', async (event) => {
     description: ($('#event-description') as HTMLTextAreaElement).value,
   }
   try {
-    const saved = await request<{ event: ApiEvent }>(id ? `/api/events/${id}` : '/api/events', { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) })
+    const saved = await request<{ event: ApiEvent }>(id ? eventApi(`/${id}`) : eventApi(), { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) })
     events.set(saved.event.id, saved.event)
     if (id) eventsService.update(toCalendarEvent(saved.event)); else eventsService.add(toCalendarEvent(saved.event))
     eventDialog.close()
@@ -236,7 +273,7 @@ $('#delete-event').addEventListener('click', async () => {
   const id = ($('#event-id') as HTMLInputElement).value
   if (!id || !window.confirm('¿Eliminar este evento permanentemente?')) return
   try {
-    await request(`/api/events/${id}`, { method: 'DELETE' })
+    await request(eventApi(`/${id}`), { method: 'DELETE' })
     events.delete(id)
     eventsService.remove(id)
     eventDialog.close()
@@ -246,18 +283,24 @@ $('#delete-event').addEventListener('click', async () => {
 
 async function initialize() {
   try {
-    const [session, data] = await Promise.all([
-      request<{ authenticated: boolean }>('/api/auth/session'),
-      request<{ events: ApiEvent[] }>('/api/events'),
-    ])
+    const session = await request<{ authenticated: boolean }>('/api/auth/session')
     setAuth(session.authenticated)
-    events = new Map(data.events.map((event) => [event.id, event]))
-    eventsService.set(data.events.map(toCalendarEvent))
+    await loadWorkspaces()
+    await loadEvents()
   } catch (caught) {
     showToast(message(caught), true)
   } finally {
     shell.setAttribute('aria-busy', 'false')
   }
 }
+
+workspacePicker.addEventListener('change', async () => {
+  activeWorkspace = workspacePicker.value
+  const url = new URL(location.href)
+  url.searchParams.set('workspace', activeWorkspace)
+  history.replaceState(null, '', url)
+  shell.setAttribute('aria-busy', 'true')
+  try { await loadEvents() } catch (caught) { showToast(message(caught), true) } finally { shell.setAttribute('aria-busy', 'false') }
+})
 
 void initialize()
