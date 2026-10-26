@@ -101,6 +101,13 @@ describe('hub-only employee calendars', () => {
     }
   })
 
+  it('passes the whole Cookie header to the hub, whatever the hub names its cookie', async () => {
+    const { env, state } = hubEnv(identity())
+    const cookie = 'theme=dark; __Secure-hub_session=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+    expect((await call(env, '/', { headers: { cookie } })).status).toBe(200)
+    expect(state.calls).toEqual([`calendar:${cookie}`])
+  })
+
   it('stops honoring the hub cookie once the hub session ends', async () => {
     const { env, state } = hubEnv(identity())
     expect((await session(env)).authenticated).toBe(true)

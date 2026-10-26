@@ -83,7 +83,7 @@ Departments work like shared inboxes. Every event has a `department_key`; employ
 
 ### Project-hub SSO
 
-The calendar has no login of its own on WCPR and Mozaico. Every request hands the browser's `hub_session` cookie (scoped to the project's parent domain) to `HUB.verify(cookie, "calendar")` over the service binding (`<project>-hub`, entrypoint `HubRpc`), cached 15 seconds per isolate. Sessions from another project's hub are refused.
+The calendar has no login of its own on WCPR and Mozaico. Every request hands the browser's whole `Cookie` header to `HUB.verify(cookie, "calendar")` over the service binding (`<project>-hub`, entrypoint `HubRpc`), cached 15 seconds per isolate. Sessions from another project's hub are refused.
 
 - No hub session: GET requests get a 302 to the hub login and come back to the original page afterwards (via a short-lived return cookie). Writes get a 401. Only `/api/health` and the signed internal CRM sync API answer without a hub session. Department agents may use their bearer token on `/api/events` and `/api/departments` only.
 - Hub levels map to roles: Owner → admin, Manager → manager on every department, Staff → operator on their hub departments, Limited → viewer on their hub departments. Explicit calendar grants can only raise access.
