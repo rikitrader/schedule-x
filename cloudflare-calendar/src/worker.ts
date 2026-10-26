@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { bearerToken, principalFromHub, resolvePrincipal, SESSION_COOKIE, SESSION_TTL_SECONDS, type Principal } from './auth'
 import { handleAdmin, handleEmployeeApi, type EventDeps } from './departments'
-import { hubConfigured, hubDeniedPage, hubHome, hubIdentity, hubLoginRedirect, hubRequired, pendingReturn } from './hub'
+import { hubConfigured, hubDeniedPage, hubFixUrl, hubHome, hubIdentity, hubLoginRedirect, hubRequired, pendingReturn } from './hub'
 import { isMessageKey, t, type Locale } from './i18n'
 import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, type Env } from './tenant'
 import { ClientError, digest, encoder, equalBytes, error, hex, hmac, hmacBytes, json, readCookie, requireSameOrigin, sha256 } from './util'
@@ -173,7 +173,7 @@ async function gate(request: Request, env: Env): Promise<Response | Principal> {
   if (bearerToken(request) && AGENT_PATHS.test(url.pathname)) { const agent = await resolvePrincipal(request, env); return agent ?? error(t(locale(env), 'authRequired'), 401) }
   const hub = await hubIdentity(request, env)
   if (hub.status === 'ok') return principalFromHub(env, hub)
-  if (hub.status === 'denied') return url.pathname.startsWith('/api/') ? error(t(locale(env), 'forbidden'), 403) : hubDeniedPage(env, hub.reason)
+  if (hub.status === 'denied') return url.pathname.startsWith('/api/') ? json({ error: t(locale(env), 'forbidden'), hub: hubFixUrl(env, hub.reason) ?? hubHome(env) }, 403) : hubDeniedPage(env, hub.reason)
   return request.method === 'GET' || request.method === 'HEAD' ? hubLoginRedirect(request, env) : error(t(locale(env), 'authRequired'), 401)
 }
 

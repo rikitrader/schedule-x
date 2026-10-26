@@ -93,11 +93,25 @@ describe('hub-only employee calendars', () => {
     expect((await call(signedIn.env, '/', { headers: { cookie: `${HUB_COOKIE}; __Host-calendar_return=${encodeURIComponent('//evil.example')}` } })).status).toBe(200)
   })
 
-  it('refuses another project hub, denied apps, and pending password changes', async () => {
-    for (const who of [identity({ project: 'mozaico' }), identity({ allowed: false, reason: 'app_denied' }), identity({ allowed: false, reason: 'password_change_required' })]) {
+  it('refuses another project hub and denied apps', async () => {
+    for (const who of [identity({ project: 'mozaico' }), identity({ allowed: false, reason: 'app_denied' })]) {
       __resetHubCache(); const { env } = hubEnv(who)
       expect((await call(env, '/', withHub())).status).toBe(403)
       expect((await call(env, '/api/events', withHub())).status).toBe(403)
+    }
+  })
+
+  it('sends owners without 2FA to hub /security and pending password changes to hub /password, never to a read-only calendar', async () => {
+    for (const [reason, target] of [['two_factor_required', 'https://hub.wcpr.pro/security'], ['password_change_required', 'https://hub.wcpr.pro/password']]) {
+      __resetHubCache(); const { env, state } = hubEnv(identity({ level: 1, allowed: false, reason }))
+      const page = await call(env, '/', withHub())
+      expect([page.status, page.headers.get('location')]).toEqual([302, target])
+      const api = await call(env, '/api/auth/session', withHub())
+      expect(api.status).toBe(403)
+      expect(((await api.json()) as { hub: string }).hub).toBe(target)
+      // Once the user fixes it in the hub, the next request goes straight in (denials are not cached).
+      state.who = identity({ level: 1 })
+      expect((await call(env, '/', withHub())).status).toBe(200)
     }
   })
 

@@ -37,6 +37,7 @@ const timezone = tenant.timezone || 'America/New_York'
 // With project-hub SSO the hub is the sign-in page; the local form is only a fallback at /?local=1.
 const hubUrl = tenant.hubUrl || ''
 const hubRequired = tenant.hubRequired === 'true'
+let hubTarget = ''
 const useHub = Boolean(hubUrl) && (hubRequired || new URLSearchParams(location.search).get('local') !== '1')
 const text = (key: MessageKey) => t(locale, key)
 const ROLE_RANK: Record<Role, number> = { viewer: 1, operator: 2, manager: 3 }
@@ -145,7 +146,8 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     // The hub gate answers 401 once the hub session is gone; reloading lets it send the browser to the hub.
     if (response.status === 401 && hubRequired) location.reload()
-    const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` })) as { error?: string }
+    const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` })) as { error?: string; hub?: string }
+    if (body.hub && /^https:\/\//u.test(body.hub)) hubTarget = body.hub
     throw new Error(body.error || `HTTP ${response.status}`)
   }
   return response.status === 204 ? (undefined as T) : response.json() as Promise<T>
@@ -370,6 +372,8 @@ async function initialize() {
     await loadEvents()
     if (employeeMode && !session.authenticated) location.assign('/api/auth/hub')
   } catch (caught) {
+    // In hub mode a signed-out or not-allowed state must never sit on a read-only calendar: hand over to the hub.
+    if (hubRequired) { location.assign(hubTarget || hubUrl); return }
     showToast(message(caught), true)
   } finally {
     shell.setAttribute('aria-busy', 'false')
