@@ -52,7 +52,7 @@ export function wcprEmail(i: WcprEmailInput): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-top:4px solid ${E.red};border-radius:4px">
 <tr><td style="padding:24px 32px 8px"><a href="https://${E.site}"><img src="${E.logoUrl}" width="${E.logoWidth}" height="${E.logoHeight}" alt="West Coast Precision Roofing" style="display:block;border:0;width:${E.logoWidth}px;max-width:100%;height:auto"></a></td></tr>
 <tr><td style="padding:16px 32px 8px"><h1 style="margin:0 0 16px;font-family:${E.font};font-size:22px;line-height:1.3;color:${E.red}">${esc(i.title)}</h1>${i.bodyHtml}${cta}</td></tr>
-<tr><td style="padding:16px 32px 24px;border-top:1px solid ${E.line};font-family:${E.font};font-size:12px;line-height:1.5;color:${E.muted}">${i.footerNote ? `${esc(i.footerNote)}<br><br>` : ""}${esc(E.legal)}<br>${esc(E.address)} · ${esc(E.phone)} · <a href="mailto:${E.email}" style="color:${E.muted}">${E.email}</a> · <a href="https://${E.site}" style="color:${E.muted}">${E.site}</a></td></tr>
+<tr><td style="padding:16px 32px 24px;border-top:1px solid ${E.line};font-family:${E.font};font-size:12px;line-height:1.5;color:${E.muted}">${i.footerNote ? `${esc(i.footerNote)}<br><br>` : ""}${esc(E.legal)}<br>${esc(E.address)} · <span style="white-space:nowrap">${esc(E.phone)}</span> · <a href="mailto:${E.email}" style="color:${E.muted}">${E.email}</a> · <a href="https://${E.site}" style="color:${E.muted}">${E.site}</a></td></tr>
 </table></td></tr></table></body></html>`;
 }
 
