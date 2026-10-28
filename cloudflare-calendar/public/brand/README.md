@@ -25,3 +25,6 @@ Use the `-white.svg` files on dark or red backgrounds. PNG fallbacks for email/P
 
 ## Spacing
 Only `--wcpr-space-*` for padding, margin and gap; `--wcpr-gutter` for page side padding; `--wcpr-tap` (44px) as the minimum touch target.
+
+## Email (every WCPR email: notifications, confirmations, invites, cadences, password resets)
+Wrap the app's email body with `wcprEmail({ title, preheader, bodyHtml, cta, footerNote })` from `brand/email/layout.ts` (helpers `wcprP`, `wcprTable`, `wcprTextFooter`). It is table-based with inline styles, Arial, 600px max, a red top rule, the PNG logo from `https://wcpr.pro/brand/logo/wcpr-logo-black-480w.png` (never SVG in email), a red bulletproof button and the legal/CSLB footer. Keep the text/plain part and add `wcprTextFooter()`. Non-TS apps: copy the same markup.
