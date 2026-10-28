@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import type { Role } from './auth'
-import { employeeMode, type Env } from './tenant'
+import { wcprHead, wcprLogo } from './brand'
+import { employeeMode, wcprKit, type Env } from './tenant'
 import { escapeHtml, readCookie, sha256 } from './util'
 
 // Project-hub single sign-on (rikitrader/project-hub, contract src/rpc.ts). The hub owns identity and
@@ -77,5 +78,6 @@ export function hubFixUrl(env: Env, reason: DeniedReason) { const path = HUB_FIX
 export function hubDeniedPage(env: Env, reason: DeniedReason) {
   const fix = hubFixUrl(env, reason); if (fix) return new Response(null, { status: 302, headers: { location: fix, 'cache-control': 'no-store' } })
   const [title, text] = DENIED[reason as 'wrong_project' | 'app_denied']; const home = escapeHtml(hubHome(env))
+  if (wcprKit(env)) return new Response(`<!doctype html><html lang="en" data-theme="light"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#c8102e">${wcprHead}<title>${title}</title><body style="margin:0;font-family:var(--wcpr-font);font-size:var(--wcpr-text);line-height:var(--wcpr-leading);color:var(--wcpr-ink);background:var(--wcpr-bg)"><main style="max-width:var(--wcpr-form-max);margin:15vh auto 0;padding:0 var(--wcpr-gutter)"><span class="wcpr-logo hero">${wcprLogo('black')}</span><h1 style="font-size:var(--wcpr-h1);margin:var(--wcpr-space-6) 0 var(--wcpr-space-2)">${title}</h1><p>${text}</p><p><a style="color:var(--wcpr-red);display:inline-flex;align-items:center;min-height:var(--wcpr-tap)" href="${home}">Go to the hub</a></p></main></body></html>`, { status: 403, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'" } })
   return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:440px;margin:15vh auto;padding:0 16px;line-height:1.5"><h1 style="font-size:20px">${title}</h1><p>${text}</p><p><a href="${home}">Go to the hub</a></p></body>`, { status: 403, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'" } })
 }

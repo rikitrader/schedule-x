@@ -1,0 +1,141 @@
+/* WCPR design tokens: the one source for brand color, spacing, type, radius, icon and logo sizes.
+   Every WCPR app and hub page loads this file first (served at /brand/tokens.css) and builds on these names.
+   Edit here in wcpr-brand, run scripts/sync.sh, never edit an app's copy. */
+:root {
+  /* Brand */
+  --wcpr-red: #c8102e;
+  --wcpr-red-ink: #ffffff;
+  --wcpr-red-hover: #a80d26;
+  --wcpr-red-tint: color-mix(in srgb, var(--wcpr-red) 10%, transparent);
+  --wcpr-charcoal: #16130f;
+
+  /* Surfaces and text (light) */
+  --wcpr-bg: #f7f3ef;
+  --wcpr-surface: #ffffff;
+  --wcpr-surface-2: #f2eee9;
+  --wcpr-ink: #16130f;
+  --wcpr-muted: #6d665f;
+  --wcpr-line: rgba(22, 19, 15, 0.12);
+  --wcpr-ok: #15803d;
+  --wcpr-warn: #b45309;
+  --wcpr-err: #b91c1c;
+  --wcpr-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 32px -12px rgba(0, 0, 0, 0.18);
+
+  /* Spacing: 4px base. Use these for every padding, margin and gap. */
+  --wcpr-space-0: 0;
+  --wcpr-space-1: 4px;
+  --wcpr-space-2: 8px;
+  --wcpr-space-3: 12px;
+  --wcpr-space-4: 16px;
+  --wcpr-space-5: 20px;
+  --wcpr-space-6: 24px;
+  --wcpr-space-8: 32px;
+  --wcpr-space-10: 40px;
+  --wcpr-space-12: 48px;
+  --wcpr-space-16: 64px;
+
+  /* Page gutter and widths (mobile first; widened below) */
+  --wcpr-gutter: 16px;
+  --wcpr-page-max: 1200px;
+  --wcpr-read-max: 720px;
+  --wcpr-form-max: 420px;
+
+  /* Radius */
+  --wcpr-radius-sm: 8px;
+  --wcpr-radius: 11px;
+  --wcpr-radius-lg: 16px;
+  --wcpr-radius-xl: 20px;
+  --wcpr-radius-pill: 999px;
+
+  /* Type */
+  --wcpr-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --wcpr-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --wcpr-text-xs: 12px;
+  --wcpr-text-sm: 13px;
+  --wcpr-text: 15px;
+  --wcpr-text-lg: 17px;
+  --wcpr-h3: 16px;
+  --wcpr-h2: 19px;
+  --wcpr-h1: 22px;
+  --wcpr-leading: 1.5;
+
+  /* Controls */
+  --wcpr-tap: 44px;          /* minimum touch target */
+  --wcpr-control-h: 44px;
+  --wcpr-control-h-sm: 32px;
+  --wcpr-focus: 0 0 0 2px var(--wcpr-surface), 0 0 0 4px var(--wcpr-red);
+
+  /* Icons: always the /brand/icons.svg sprite at one of these sizes */
+  --wcpr-icon-sm: 16px;
+  --wcpr-icon: 20px;
+  --wcpr-icon-lg: 24px;
+  --wcpr-icon-tile: 32px;
+
+  /* Logo heights: the horizontal logo is ~5.5:1, so these keep it legible without crowding */
+  --wcpr-logo-h: 26px;       /* app header, mobile */
+  --wcpr-logo-h-lg: 34px;    /* app header, desktop */
+  --wcpr-logo-h-hero: 56px;  /* sign-in and splash */
+  --wcpr-mark-h: 24px;       /* house mark alone, for very narrow headers */
+}
+
+@media (min-width: 641px) {
+  :root { --wcpr-gutter: 24px; --wcpr-h1: 24px; }
+}
+@media (min-width: 1025px) {
+  :root { --wcpr-gutter: 32px; --wcpr-h1: 26px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --wcpr-bg: #0f0d0c;
+    --wcpr-surface: #1c1917;
+    --wcpr-surface-2: #24201d;
+    --wcpr-ink: #f3eee8;
+    --wcpr-muted: #a39b92;
+    --wcpr-line: rgba(255, 255, 255, 0.12);
+    --wcpr-ok: #4ade80;
+    --wcpr-warn: #fbbf24;
+    --wcpr-err: #f87171;
+    --wcpr-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -14px rgba(0, 0, 0, 0.7);
+  }
+}
+:root[data-theme="dark"] {
+  --wcpr-bg: #0f0d0c;
+  --wcpr-surface: #1c1917;
+  --wcpr-surface-2: #24201d;
+  --wcpr-ink: #f3eee8;
+  --wcpr-muted: #a39b92;
+  --wcpr-line: rgba(255, 255, 255, 0.12);
+  --wcpr-ok: #4ade80;
+  --wcpr-warn: #fbbf24;
+  --wcpr-err: #f87171;
+  --wcpr-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -14px rgba(0, 0, 0, 0.7);
+}
+
+/* ---- Shared pieces: same markup in every app ---- */
+
+/* Logo: <a class="wcpr-logo" href="/"><img src="/brand/logo/wcpr-logo-black.svg" alt="West Coast Precision Roofing"></a>
+   Dark headers use wcpr-logo-white.svg. Below 360px the header swaps to the house mark (.wcpr-logo-mark). */
+.wcpr-logo { display: inline-flex; align-items: center; flex-shrink: 0; min-height: var(--wcpr-tap); line-height: 0; }
+.wcpr-logo img, .wcpr-logo svg { display: block; height: var(--wcpr-logo-h); width: auto; max-width: 100%; }
+.wcpr-logo.hero img, .wcpr-logo.hero svg { height: var(--wcpr-logo-h-hero); }
+.wcpr-logo .wcpr-logo-mark { display: none; }
+@media (min-width: 641px) { .wcpr-logo img, .wcpr-logo svg { height: var(--wcpr-logo-h-lg); } }
+@media (max-width: 359px) {
+  .wcpr-logo:not(.hero) .wcpr-logo-full { display: none; }
+  .wcpr-logo:not(.hero) .wcpr-logo-mark { display: block; height: var(--wcpr-mark-h); }
+}
+
+/* Icon: <svg class="wcpr-icon" aria-hidden="true"><use href="/brand/icons.svg#i-plus"/></svg> */
+.wcpr-icon { width: var(--wcpr-icon); height: var(--wcpr-icon); flex-shrink: 0; vertical-align: middle; }
+.wcpr-icon.sm { width: var(--wcpr-icon-sm); height: var(--wcpr-icon-sm); }
+.wcpr-icon.lg { width: var(--wcpr-icon-lg); height: var(--wcpr-icon-lg); }
+
+/* Page container: same gutters everywhere */
+.wcpr-page { width: 100%; max-width: var(--wcpr-page-max); margin-inline: auto; padding-inline: max(var(--wcpr-gutter), env(safe-area-inset-left)) max(var(--wcpr-gutter), env(safe-area-inset-right)); }
+
+/* App header bar: logo left, app name, actions right */
+.wcpr-appbar { display: flex; align-items: center; gap: var(--wcpr-space-3); min-height: 56px; padding: max(var(--wcpr-space-2), env(safe-area-inset-top)) var(--wcpr-gutter) var(--wcpr-space-2); border-bottom: 1px solid var(--wcpr-line); background: var(--wcpr-surface); }
+.wcpr-appbar .wcpr-appname { font-size: var(--wcpr-text-sm); font-weight: 600; color: var(--wcpr-muted); padding-left: var(--wcpr-space-3); border-left: 1px solid var(--wcpr-line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wcpr-appbar .wcpr-actions { margin-left: auto; display: flex; align-items: center; gap: var(--wcpr-space-2); }
+@media (max-width: 480px) { .wcpr-appbar .wcpr-appname { display: none; } }

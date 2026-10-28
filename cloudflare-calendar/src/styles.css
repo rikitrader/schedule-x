@@ -1,64 +1,99 @@
-:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0b1f3a; background: #f5f8fc; font-synthesis: none; }
+/* Spacing, radius, type and control sizes read the WCPR kit tokens (/brand/tokens.css, loaded on the WCPR tenant only);
+   the fallback in each var() is the original value, so MiPolitico and Mozaico render exactly as before.
+   Colors go through the --c-* names below; only [data-brand-kit="wcpr"] remaps them. */
+:root {
+  --c-ink: #0b1f3a; --c-bg: #f5f8fc; --c-surface: #fff; --c-head: #07182f; --c-head-shadow: 0 8px 24px #07182f21; --c-head-muted: #c6d3e3; --c-head-sub: #9eb5d2;
+  --c-select-bg: #10243f; --c-select-line: #405674; --c-accent: #145dda; --c-eyebrow: #1762d0; --c-muted: #60728b; --c-legend: #51647c;
+  --c-line: #dce4ee; --c-btn-line: #ccd6e3; --c-btn-hover: #6b87aa; --c-btn-ink: #10243f; --c-focus: #83aeff; --c-label: #334a66; --c-input-line: #c9d4e2; --c-shadow: 0 18px 50px #263c5914;
+  font-family: var(--wcpr-font, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); color: var(--c-ink); background: var(--c-bg); font-synthesis: none;
+}
+[data-brand-kit="wcpr"] {
+  --c-ink: var(--wcpr-ink); --c-bg: var(--wcpr-bg); --c-surface: var(--wcpr-surface); --c-head: var(--wcpr-charcoal); --c-head-shadow: none; --c-head-muted: #d6d0ca; --c-head-sub: #a39b92;
+  --c-select-bg: #24201d; --c-select-line: rgba(255, 255, 255, .25); --c-accent: var(--wcpr-red); --c-eyebrow: var(--wcpr-red); --c-muted: var(--wcpr-muted); --c-legend: var(--wcpr-muted);
+  --c-line: var(--wcpr-line); --c-btn-line: var(--wcpr-line); --c-btn-hover: var(--wcpr-muted); --c-btn-ink: var(--wcpr-ink); --c-focus: var(--wcpr-red); --c-label: var(--wcpr-ink); --c-input-line: rgba(22, 19, 15, .2); --c-shadow: var(--wcpr-shadow);
+}
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+body { margin: 0; min-width: 320px; min-height: 100vh; font-size: var(--wcpr-text, inherit); }
 button, input, select, textarea { font: inherit; }
-button { cursor: pointer; border: 1px solid #ccd6e3; border-radius: 10px; padding: .65rem 1rem; background: #fff; color: #10243f; }
-button:hover { border-color: #6b87aa; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #83aeff; outline-offset: 2px; }
-.primary { background: #145dda; color: #fff; border-color: #145dda; font-weight: 700; }
+button { cursor: pointer; border: 1px solid var(--c-btn-line); border-radius: var(--wcpr-radius, 10px); padding: var(--wcpr-space-3, .65rem) var(--wcpr-space-4, 1rem); background: var(--c-surface); color: var(--c-btn-ink); }
+button:hover { border-color: var(--c-btn-hover); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+.primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); font-weight: 700; }
+[data-brand-kit="wcpr"] .primary:hover { background: var(--wcpr-red-hover); border-color: var(--wcpr-red-hover); }
 .danger { color: #b42318; border-color: #f2b8b5; }
-.skip-link { position: fixed; left: 1rem; top: -4rem; z-index: 20; background: #fff; padding: .7rem 1rem; }
-.skip-link:focus { top: 1rem; }
-.app-header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(1rem, 4vw, 4rem); background: #07182f; color: #fff; box-shadow: 0 8px 24px #07182f21; }
-.brand { display: flex; align-items: center; gap: .8rem; color: inherit; text-decoration: none; }
+.skip-link { position: fixed; left: var(--wcpr-space-4, 1rem); top: -4rem; z-index: 20; background: #fff; padding: var(--wcpr-space-3, .7rem) var(--wcpr-space-4, 1rem); }
+.skip-link:focus { top: var(--wcpr-space-4, 1rem); }
+.app-header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--wcpr-gutter, clamp(1rem, 4vw, 4rem)); background: var(--c-head); color: #fff; box-shadow: var(--c-head-shadow); }
+.brand { display: flex; align-items: center; gap: var(--wcpr-space-3, .8rem); color: inherit; text-decoration: none; }
 .brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 11px; font-weight: 900; font-size: 1.35rem; background: linear-gradient(140deg, #1473e6, #00a1ff); }
 .brand span:last-child { display: grid; line-height: 1.05; }
-.brand small { color: #9eb5d2; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; margin-top: .25rem; }
-.header-actions { display: flex; align-items: center; gap: .75rem; }
-.workspace-picker { display: flex; align-items: center; gap: .45rem; color: #c6d3e3; font-size: .82rem; }
-.workspace-picker select { max-width: 15rem; border: 1px solid #405674; border-radius: 8px; padding: .5rem .65rem; background: #10243f; color: #fff; }
-.auth-status { color: #c6d3e3; font-size: .9rem; }
-main { max-width: 1500px; margin: 0 auto; padding: 2rem clamp(1rem, 4vw, 4rem) 4rem; }
-.intro { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 1.5rem; }
-.eyebrow { color: #1762d0; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 .45rem; }
-h1 { font-size: clamp(2rem, 4vw, 3.2rem); letter-spacing: -.045em; margin: 0; }
-.intro p:last-child { color: #60728b; margin: .6rem 0 0; }
-.legend { display: flex; flex-wrap: wrap; gap: 1rem; color: #51647c; font-size: .9rem; }
-.legend span { display: flex; align-items: center; gap: .4rem; }
+.brand small { color: var(--c-head-sub); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; margin-top: .25rem; }
+/* WCPR header: kit logo (.wcpr-logo, sized by tokens.css) + app name, like the other WCPR apps. */
+[data-brand-kit="wcpr"] .app-header { height: auto; min-height: 64px; gap: var(--wcpr-space-3); padding-block: var(--wcpr-space-2); }
+.wcpr-appname { margin-right: auto; padding-left: var(--wcpr-space-3); margin-left: var(--wcpr-space-3); border-left: 1px solid rgba(255, 255, 255, .25); color: var(--c-head-muted); font-size: var(--wcpr-text-sm); font-weight: 600; white-space: nowrap; }
+.header-actions { display: flex; align-items: center; gap: var(--wcpr-space-3, .75rem); }
+.header-actions button, .admin-link { display: inline-flex; align-items: center; gap: var(--wcpr-space-2, 0); }
+/* App-owned buttons only: Schedule-X's own controls keep their component sizing. */
+.header-actions button, .dialog-actions button { min-height: var(--wcpr-tap, 0); }
+.header-actions [hidden] { display: none; }
+.workspace-picker { display: flex; align-items: center; gap: var(--wcpr-space-2, .45rem); color: var(--c-head-muted); font-size: var(--wcpr-text-sm, .82rem); }
+.workspace-picker select { max-width: 15rem; min-height: var(--wcpr-tap, 0); border: 1px solid var(--c-select-line); border-radius: var(--wcpr-radius-sm, 8px); padding: var(--wcpr-space-2, .5rem) var(--wcpr-space-3, .65rem); background: var(--c-select-bg); color: #fff; }
+.auth-status { color: var(--c-head-muted); font-size: var(--wcpr-text-sm, .9rem); }
+main { max-width: 1500px; margin: 0 auto; padding: var(--wcpr-space-8, 2rem) var(--wcpr-gutter, clamp(1rem, 4vw, 4rem)) var(--wcpr-space-16, 4rem); }
+.intro { display: flex; align-items: end; justify-content: space-between; gap: var(--wcpr-space-8, 2rem); margin-bottom: var(--wcpr-space-6, 1.5rem); }
+.eyebrow { color: var(--c-eyebrow); font-size: var(--wcpr-text-xs, .75rem); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 var(--wcpr-space-2, .45rem); }
+h1 { font-size: var(--wcpr-h1, clamp(2rem, 4vw, 3.2rem)); letter-spacing: -.045em; margin: 0; }
+[data-brand-kit="wcpr"] h1 { letter-spacing: -.02em; }
+.intro p:last-child { color: var(--c-muted); margin: var(--wcpr-space-2, .6rem) 0 0; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--wcpr-space-4, 1rem); color: var(--c-legend); font-size: var(--wcpr-text-sm, .9rem); }
+.legend span { display: flex; align-items: center; gap: var(--wcpr-space-2, .4rem); }
 .dot { width: .65rem; height: .65rem; border-radius: 50%; display: inline-block; }
 .dot-public { background: #185adb; }.dot-team { background: #0f9f6e; }.dot-private { background: #bd8b00; }
-.calendar-shell { background: #fff; min-height: 680px; border: 1px solid #dce4ee; border-radius: 18px; overflow: hidden; box-shadow: 0 18px 50px #263c5914; }
+.calendar-shell { background: #fff; min-height: 680px; border: 1px solid var(--c-line); border-radius: var(--wcpr-radius-lg, 18px); overflow: hidden; box-shadow: var(--c-shadow); }
 .calendar-shell[aria-busy="true"] { opacity: .65; }
 #calendar { height: min(780px, calc(100vh - 230px)); min-height: 640px; }
 .sx-react-calendar-wrapper, .sx__calendar-wrapper { width: 100%; height: 100%; }
-dialog { border: 0; padding: 0; border-radius: 18px; box-shadow: 0 30px 90px #06132955; width: min(92vw, 600px); }
+dialog { border: 0; padding: 0; border-radius: var(--wcpr-radius-xl, 18px); box-shadow: 0 30px 90px #06132955; width: min(92vw, 600px); }
 dialog::backdrop { background: #061329a8; backdrop-filter: blur(3px); }
-.dialog-card { position: relative; display: grid; gap: 1rem; padding: 2rem; }
-.dialog-card h2 { margin: -.25rem 0 .4rem; font-size: 1.65rem; }
-.dialog-close { position: absolute; right: .9rem; top: .9rem; border: 0; font-size: 1.5rem; padding: .3rem .65rem; }
-.dialog-card label { display: grid; gap: .45rem; color: #334a66; font-size: .9rem; font-weight: 650; }
-.dialog-card input, .dialog-card select, .dialog-card textarea { width: 100%; border: 1px solid #c9d4e2; border-radius: 9px; padding: .75rem .85rem; color: #10243f; background: #fff; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.dialog-card label.check { display: flex; align-items: center; gap: .6rem; }
-.check input { width: auto; }
-.dialog-actions { display: flex; gap: .7rem; align-items: center; margin-top: .5rem; }
+[data-brand-kit="wcpr"] dialog::backdrop { background: rgba(22, 19, 15, .6); }
+.dialog-card { position: relative; display: grid; gap: var(--wcpr-space-4, 1rem); padding: var(--wcpr-space-8, 2rem); }
+.dialog-card h2 { margin: calc(-1 * var(--wcpr-space-1, .25rem)) 0 var(--wcpr-space-2, .4rem); font-size: var(--wcpr-h2, 1.65rem); }
+.dialog-close { position: absolute; right: var(--wcpr-space-3, .9rem); top: var(--wcpr-space-3, .9rem); border: 0; font-size: 1.5rem; padding: var(--wcpr-space-1, .3rem) var(--wcpr-space-3, .65rem); }
+[data-brand-kit="wcpr"] .dialog-close { display: grid; place-items: center; width: var(--wcpr-tap); padding: 0; }
+.dialog-card label { display: grid; gap: var(--wcpr-space-2, .45rem); color: var(--c-label); font-size: var(--wcpr-text-sm, .9rem); font-weight: 650; }
+.dialog-card input, .dialog-card select, .dialog-card textarea { width: 100%; min-height: var(--wcpr-control-h, 0); border: 1px solid var(--c-input-line); border-radius: var(--wcpr-radius-sm, 9px); padding: var(--wcpr-space-3, .75rem) var(--wcpr-space-3, .85rem); color: var(--c-btn-ink); background: #fff; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--wcpr-space-4, 1rem); }
+.dialog-card label.check { display: flex; align-items: center; gap: var(--wcpr-space-2, .6rem); }
+.check input { width: auto; min-height: 0; }
+.dialog-actions { display: flex; gap: var(--wcpr-space-3, .7rem); align-items: center; margin-top: var(--wcpr-space-2, .5rem); }
 .spacer { flex: 1; }
 .form-error { min-height: 1.2rem; color: #b42318; margin: 0; }
-.toast { position: fixed; right: 1.5rem; bottom: 1.5rem; translate: 0 150%; opacity: 0; transition: .25s ease; z-index: 30; background: #123d2d; color: #fff; padding: .8rem 1.1rem; border-radius: 10px; box-shadow: 0 12px 30px #0003; }
+.toast { position: fixed; right: var(--wcpr-space-6, 1.5rem); bottom: var(--wcpr-space-6, 1.5rem); translate: 0 150%; opacity: 0; transition: .25s ease; z-index: 30; background: #123d2d; color: #fff; padding: var(--wcpr-space-3, .8rem) var(--wcpr-space-4, 1.1rem); border-radius: var(--wcpr-radius, 10px); box-shadow: 0 12px 30px #0003; }
 .toast.visible { translate: 0; opacity: 1; }.toast.error { background: #85231d; }
 @media (max-width: 700px) {
-  .app-header { height: auto; padding: .8rem 1rem; align-items: flex-start; }
+  .app-header { height: auto; padding: var(--wcpr-space-3, .8rem) var(--wcpr-gutter, 1rem); align-items: flex-start; }
+  [data-brand-kit="wcpr"] .app-header { flex-wrap: wrap; align-items: center; }
+  [data-brand-kit="wcpr"] .header-actions { width: 100%; }
   .auth-status { display: none; }
   .header-actions { flex-wrap: wrap; justify-content: end; }
-  .header-actions button { padding: .55rem .65rem; }
-  main { padding-top: 1.2rem; }
-  .intro { display: grid; gap: 1rem; }
-  .legend { gap: .65rem; }
-  .calendar-shell { border-radius: 12px; min-height: 620px; }
+  .header-actions button { padding: var(--wcpr-space-2, .55rem) var(--wcpr-space-3, .65rem); }
+  main { padding-top: var(--wcpr-space-5, 1.2rem); }
+  .intro { display: grid; gap: var(--wcpr-space-4, 1rem); }
+  .legend { gap: var(--wcpr-space-3, .65rem); }
+  .calendar-shell { border-radius: var(--wcpr-radius, 12px); min-height: 620px; }
   #calendar { min-height: 620px; height: calc(100vh - 250px); }
   .form-row { grid-template-columns: 1fr; }
-  .dialog-card { padding: 1.5rem; }
+  .dialog-card { padding: var(--wcpr-space-6, 1.5rem); }
+}
+/* Phones: WCPR header actions fit one row; the sprite icon carries New event / Admin, the label stays for screen readers. */
+@media (max-width: 480px) {
+  .wcpr-appname { display: none; }
+  [data-brand-kit="wcpr"] .workspace-picker > span { display: none; }
+  [data-brand-kit="wcpr"] .header-actions { gap: var(--wcpr-space-2); }
+  [data-brand-kit="wcpr"] #new-event, [data-brand-kit="wcpr"] .admin-link { justify-content: center; min-width: var(--wcpr-tap); padding: 0; }
+  [data-brand-kit="wcpr"] #new-event > span, [data-brand-kit="wcpr"] .admin-link > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
-.admin-link { color: #c6d3e3; font-size: .9rem; }
+.admin-link { color: var(--c-head-muted); font-size: var(--wcpr-text-sm, .9rem); }
+[data-brand-kit="wcpr"] .admin-link { min-height: var(--wcpr-tap); }
 #workspace-picker-label[hidden], #department-picker-label[hidden], #event-department-label[hidden] { display: none; }
