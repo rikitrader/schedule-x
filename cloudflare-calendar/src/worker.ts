@@ -1,10 +1,11 @@
 /// <reference types="@cloudflare/workers-types" />
 import { adminPasswordLogin, adminPasswordLogout, adminPasswordSession } from './admin-password'
 import { bearerToken, principalFromHub, resolvePrincipal, type Principal } from './auth'
+import { brandAsset, WCPR_RED, wcprHead, wcprIcon, wcprLogo } from './brand'
 import { handleAdmin, handleEmployeeApi, type EventDeps } from './departments'
 import { hubConfigured, hubDeniedPage, hubFixUrl, hubHome, hubIdentity, hubLoginRedirect, hubRequired, pendingReturn } from './hub'
 import { isMessageKey, t, type Locale } from './i18n'
-import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, type Env } from './tenant'
+import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, wcprKit, type Env } from './tenant'
 import { ClientError, encoder, equalBytes, error, hex, hmacBytes, json, requireSameOrigin, sha256 } from './util'
 
 export type { Env }
@@ -122,7 +123,7 @@ function tenantHtml(response: Response, env: Env) {
   const rewriter = new HTMLRewriter()
     .on('body', { element(element) { if (hubConfigured(env)) { element.setAttribute('data-hub-url', hubHome(env)); if (hubRequired(env)) element.setAttribute('data-hub-required', 'true') } } })
   if (isDefaultTenant(env)) return rewriter.transform(response)
-  return rewriter
+  rewriter
     .on('html', { element(element) { element.setAttribute('lang', lang) } })
     .on('title', { element(element) { element.setInnerContent(`${t(lang, 'brandSub')} | ${brand}`) } })
     .on('meta[name="description"]', { element(element) { element.setAttribute('content', `${t(lang, 'pageTitle', brand)}.`) } })
@@ -132,7 +133,23 @@ function tenantHtml(response: Response, env: Env) {
     .on('.brand strong', { element(element) { element.setInnerContent(brand) } })
     .on('[data-i18n]', { element(element) { const key = element.getAttribute('data-i18n') || ''; if (isMessageKey(key)) element.setInnerContent(t(lang, key, brand)) } })
     .on('[data-i18n-aria]', { element(element) { const key = element.getAttribute('data-i18n-aria') || ''; if (isMessageKey(key)) element.setAttribute('aria-label', t(lang, key, brand)) } })
-    .transform(response)
+  return (wcprKit(env) ? wcprHtml(rewriter, lang) : rewriter).transform(response)
+}
+
+// WCPR chrome: kit tokens before the app CSS, kit favicon/manifest/theme color, the white horizontal logo in the dark
+// header, and sprite icons on the header and dialog buttons. Registered after the i18n handlers so these win.
+function wcprHtml(rewriter: HTMLRewriter, lang: Locale) {
+  return rewriter
+    .on('html', { element(element) { element.setAttribute('data-brand-kit', 'wcpr'); element.setAttribute('data-theme', 'light') } })
+    .on('meta[name="viewport"]', { element(element) { element.after(wcprHead, { html: true }) } })
+    .on('meta[name="theme-color"]', { element(element) { element.setAttribute('content', WCPR_RED) } })
+    .on('.brand', { element(element) {
+      element.setAttribute('class', 'brand wcpr-logo'); element.setAttribute('aria-label', `West Coast Precision Roofing ${t(lang, 'brandSub')}`)
+      element.setInnerContent(wcprLogo('white'), { html: true }); element.after(`<span class="wcpr-appname">${t(lang, 'brandSub')}</span>`, { html: true })
+    } })
+    .on('#new-event', { element(element) { element.setInnerContent(`${wcprIcon('plus')}<span>${t(lang, 'newEvent')}</span>`, { html: true }) } })
+    .on('#admin-link', { element(element) { element.setInnerContent(`${wcprIcon('settings')}<span>${t(lang, 'admin')}</span>`, { html: true }) } })
+    .on('.dialog-close', { element(element) { element.setInnerContent(wcprIcon('close'), { html: true }) } })
 }
 
 async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
@@ -179,6 +196,7 @@ async function gate(request: Request, env: Env): Promise<Response | Principal> {
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url)
+  const brand = await brandAsset(request, env); if (brand) return brand
   if (url.pathname === '/api/health' || url.pathname.startsWith('/api/internal/')) return handleApi(request, env, ctx)
   if (hubRequired(env)) {
     const passed = await gate(request, env); if (passed instanceof Response) return passed

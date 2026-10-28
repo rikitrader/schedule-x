@@ -26,6 +26,8 @@ export interface Env {
   HUB_LOGIN_URL?: string
   // MiPolitico only: "true" retires the shared admin password and requires the hub for every page.
   HUB_REQUIRED?: string
+  // "wcpr" serves the vendored West Coast Precision Roofing kit (public/brand/) on this tenant only.
+  BRAND_KIT?: string
 }
 
 // Webhook destinations are pinned to this allowlist so a config typo can never ship events to another project's CRM.
@@ -35,6 +37,7 @@ export const brandName = (env: Pick<Env, 'BRAND_NAME'>) => env.BRAND_NAME || 'Mi
 export const serviceName = (env: Pick<Env, 'SERVICE_NAME'>) => env.SERVICE_NAME || 'mipolitico-calendar'
 export const locale = (env: Pick<Env, 'LOCALE'>): Locale => (env.LOCALE === 'en' ? 'en' : 'es')
 export const timezone = (env: Pick<Env, 'TIMEZONE'>) => env.TIMEZONE || 'America/New_York'
+export const wcprKit = (env: Pick<Env, 'BRAND_KIT'>) => env.BRAND_KIT === 'wcpr'
 export const employeeMode = (env: Pick<Env, 'AUTH_MODE'>) => env.AUTH_MODE === 'employee'
 export const isDefaultTenant = (env: Env) => !employeeMode(env) && locale(env) === 'es' && brandName(env) === 'MiPolitico' && timezone(env) === 'America/New_York'
 export function crmHost(env: Pick<Env, 'CRM_HOST'>) { const host = env.CRM_HOST || 'crm.mipolitico.com'; if (!ALLOWED_CRM_HOSTS.has(host)) throw new Error('crm_host_not_allowed'); return host }
