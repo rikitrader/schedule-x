@@ -9,6 +9,7 @@ import {
 } from '@schedule-x/calendar'
 import { createEventsServicePlugin } from '@schedule-x/events-service'
 import { translations } from '@schedule-x/translations'
+import { toZoned } from './event-time'
 import { t, type Locale, type MessageKey } from './i18n'
 import '@schedule-x/theme-default/dist/index.css'
 import './styles.css'
@@ -82,8 +83,8 @@ function toCalendarEvent(event: ApiEvent): CalendarEventExternal {
   return {
     id: event.id,
     title: event.title,
-    start: event.isAllDay ? Temporal.PlainDate.from(event.start) : Temporal.ZonedDateTime.from(event.start),
-    end: event.isAllDay ? Temporal.PlainDate.from(event.end) : Temporal.ZonedDateTime.from(event.end),
+    start: event.isAllDay ? Temporal.PlainDate.from(event.start) : toZoned(event.start, timezone),
+    end: event.isAllDay ? Temporal.PlainDate.from(event.end) : toZoned(event.end, timezone),
     calendarId: event.calendarId,
     description: event.description,
     location: event.location,
@@ -226,12 +227,15 @@ async function loadEvents() {
   }
   const data = await request<{ events: ApiEvent[] }>(eventApi())
   events = new Map(data.events.map((event) => [event.id, event]))
-  eventsService.set(data.events.map(toCalendarEvent))
+  // One unreadable row must not take the whole calendar down.
+  eventsService.set(data.events.flatMap((event) => {
+    try { return [toCalendarEvent(event)] } catch (caught) { console.error('event_skipped', event.id, message(caught)); return [] }
+  }))
 }
 
 function dateTimeInput(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) return `${value}T09:00`
-  return Temporal.ZonedDateTime.from(value).toPlainDateTime().toString({ smallestUnit: 'minute' })
+  return toZoned(value, timezone).toPlainDateTime().toString({ smallestUnit: 'minute' })
 }
 
 function inputToZoned(value: string) {
@@ -373,7 +377,8 @@ async function initialize() {
     if (employeeMode && !session.authenticated) location.assign('/api/auth/hub')
   } catch (caught) {
     // In hub mode a signed-out or not-allowed state must never sit on a read-only calendar: hand over to the hub.
-    if (hubRequired) { location.assign(hubTarget || hubUrl); return }
+    // Any other failure stays here with an error, or the launcher's tile looks dead.
+    if (hubRequired && (hubTarget || !session.authenticated)) { location.assign(hubTarget || hubUrl); return }
     showToast(message(caught), true)
   } finally {
     shell.setAttribute('aria-busy', 'false')
