@@ -18,10 +18,12 @@
     // Project-hub SSO: this project's own hub only (sessions from another hub are unknown to it).
     { "binding": "HUB", "service": "wcpr-hub", "entrypoint": "HubRpc" }
   ],
-  "triggers": { "crons": ["* * * * *"] },
+  // "* * * * *" drains the CRM outbox; "0 1,14,20 * * *" is the AccuLynx sync (06:00/12:00/17:00 Pacific in winter).
+  "triggers": { "crons": ["* * * * *", "0 1,14,20 * * *"] },
   "vars": {
     "BRAND_NAME": "WCPR",
     "BRAND_KIT": "wcpr",
+    "ACCULYNX_SYNC": "true",
     "SERVICE_NAME": "wcpr-calendar",
     "LOCALE": "en",
     "TIMEZONE": "America/Los_Angeles",

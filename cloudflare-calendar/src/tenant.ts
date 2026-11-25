@@ -28,6 +28,11 @@ export interface Env {
   HUB_REQUIRED?: string
   // "wcpr" serves the vendored West Coast Precision Roofing kit (public/brand/) on this tenant only.
   BRAND_KIT?: string
+  // WCPR only: "true" + the ACCULYNX_API_KEY and ACCULYNX_CALENDAR_DEPARTMENTS secrets turn on the three-times-a-day AccuLynx → calendar sync.
+  ACCULYNX_SYNC?: string
+  ACCULYNX_API_KEY?: string
+  // Secret JSON {"<AccuLynx calendar name>": "<department key>"}; kept out of git because calendar names are staff names.
+  ACCULYNX_CALENDAR_DEPARTMENTS?: string
 }
 
 // Webhook destinations are pinned to this allowlist so a config typo can never ship events to another project's CRM.

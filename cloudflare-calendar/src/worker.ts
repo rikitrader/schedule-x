@@ -8,6 +8,7 @@ import { isMessageKey, t, type Locale } from './i18n'
 import { brandName, crmHost, employeeMode, employeeWorkspace, isDefaultTenant, locale, serviceName, timezone, wcprKit, type Env } from './tenant'
 import { ClientError, encoder, equalBytes, error, hex, hmacBytes, json, requireSameOrigin, sha256 } from './util'
 
+import { ACCULYNX_SYNC_CRON, runAccuLynxSync, syncStatus } from './acculynx-sync'
 export type { Env }
 
 type EventInput = { title: string; start: string; end: string; isAllDay?: boolean; calendarId?: string; description?: string; location?: string }
@@ -155,7 +156,7 @@ function wcprHtml(rewriter: HTMLRewriter, lang: Locale) {
 async function handleApi(request: Request, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url)
   if (url.pathname.startsWith('/api/internal/')) return handleInternalApi(request, env)
-  if (url.pathname === '/api/health' && request.method === 'GET') { const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>(); return json({ ok: db?.ok === 1, service: serviceName(env), crmSyncConfigured: Boolean(env.CALENDAR_SYNC_SECRET && env.CRM_WEBHOOK_URL) }) }
+  if (url.pathname === '/api/health' && request.method === 'GET') { const db = await env.CALENDAR_DB.prepare('SELECT 1 AS ok').first<{ ok: number }>(); return json({ ok: db?.ok === 1, service: serviceName(env), crmSyncConfigured: Boolean(env.CALENDAR_SYNC_SECRET && env.CRM_WEBHOOK_URL), ...(await syncStatus(env).then((status) => (status ? { acculynxSync: status } : {}))) }) }
   if (url.pathname === '/api/auth/session' && request.method === 'GET') return json({ authenticated: await isAdmin(request, env) })
   if (url.pathname === '/api/auth/login' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); if (hubRequired(env)) return error('Inicia sesión desde el hub.', 403); return adminPasswordLogin(request, env, await readJson(request) as { password?: unknown }) }
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') { if (!requireSameOrigin(request)) return error('Origen no autorizado.', 403); return adminPasswordLogout(request, env) }
@@ -227,5 +228,5 @@ export default {
     const headers = new Headers(response.headers); headers.set('strict-transport-security', HSTS)
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
   },
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(drainWebhookOutbox(env)) },
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) { ctx.waitUntil(event.cron === ACCULYNX_SYNC_CRON ? runAccuLynxSync(env, outboxStatement) : drainWebhookOutbox(env)) },
 } satisfies ExportedHandler<Env>
